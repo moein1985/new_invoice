@@ -1,0 +1,158 @@
+// Invoice Management System - Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  username      String    @unique
+  password      String
+  fullName      String
+  role          UserRole  @default(USER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  createdDocuments Document[] @relation("CreatedBy")
+  approvals        Approval[]
+  
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  USER
+}
+
+// ============================================
+// CUSTOMER MANAGEMENT
+// ============================================
+
+model Customer {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  documents   Document[]
+
+  @@map("customers")
+}
+
+// ============================================
+// DOCUMENT MANAGEMENT
+// ============================================
+
+model Document {
+  id                      String         @id @default(uuid())
+  documentNumber          String         @unique
+  documentType            DocumentType
+  customerId              String
+  issueDate               DateTime
+  dueDate                 DateTime?
+  totalAmount             Float          @default(0)
+  discountAmount          Float          @default(0)
+  finalAmount             Float          @default(0)
+  status                  String         @default("draft")
+  approvalStatus          ApprovalStatus @default(PENDING)
+  notes                   String?
+  attachment              String?
+  defaultProfitPercentage Float          @default(20)
+  
+  // Conversion tracking
+  convertedFromId         String?        @unique
+  
+  createdById             String
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  // Relations
+  customer                Customer       @relation(fields: [customerId], references: [id])
+  createdBy               User           @relation("CreatedBy", fields: [createdById], references: [id])
+  items                   DocumentItem[]
+  approvals               Approval[]
+  
+  convertedFrom           Document?      @relation("DocumentConversion", fields: [convertedFromId], references: [id], onDelete: SetNull)
+  convertedTo             Document?      @relation("DocumentConversion")
+
+  @@map("documents")
+}
+
+enum DocumentType {
+  TEMP_PROFORMA    // پیش‌فاکتور موقت
+  PROFORMA         // پیش‌فاکتور
+  INVOICE          // فاکتور
+  RETURN_INVOICE   // فاکتور برگشتی
+  RECEIPT          // رسید
+  OTHER            // سایر
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ============================================
+// DOCUMENT ITEMS
+// ============================================
+
+model DocumentItem {
+  id                String   @id @default(uuid())
+  documentId        String
+  productName       String
+  description       String?
+  quantity          Float
+  unit              String
+  purchasePrice     Float
+  sellPrice         Float
+  profitPercentage  Float?
+  supplier          String
+  isManualPrice     Boolean  @default(false)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  document          Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_items")
+}
+
+// ============================================
+// APPROVAL WORKFLOW
+// ============================================
+
+model Approval {
+  id          String         @id @default(uuid())
+  documentId  String
+  userId      String
+  status      ApprovalStatus
+  comment     String?
+  createdAt   DateTime       @default(now())
+
+  // Relations
+  document    Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id])
+
+  @@map("approvals")
+}
