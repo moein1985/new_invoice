@@ -5,12 +5,14 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
+import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 export default function UsersPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const { data: users, isLoading, refetch } = trpc.user.list.useQuery(
@@ -86,6 +88,8 @@ export default function UsersPage() {
     const data = {
       username: formData.get('username') as string,
       fullName: formData.get('fullName') as string,
+      email: formData.get('email') as string,
+      phone: formData.get('phone') as string,
       password: formData.get('password') as string,
       role: formData.get('role') as 'ADMIN' | 'MANAGER' | 'USER',
     };
@@ -151,7 +155,13 @@ export default function UsersPage() {
                     نام
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                    نام کاربری
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
                     ایمیل
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                    تلفن
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
                     نقش
@@ -169,6 +179,12 @@ export default function UsersPage() {
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                       {user.username}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                      {user.email || '-'}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                      {user.phone || '-'}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                       <span className={`rounded-full px-2 py-1 text-xs ${
@@ -226,17 +242,22 @@ export default function UsersPage() {
               </h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">نام کاربری</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    نام کاربری <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     name="username"
                     required
+                    disabled={!!editingUser}
                     defaultValue={editingUser?.username}
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 disabled:bg-gray-100"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">نام کامل</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    نام کامل <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     name="fullName"
@@ -247,15 +268,54 @@ export default function UsersPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    رمز عبور {editingUser && '(خالی بگذارید برای عدم تغییر)'}
+                    ایمیل <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="password"
-                    name="password"
-                    required={!editingUser}
-                    minLength={6}
+                    type="email"
+                    name="email"
+                    required
+                    defaultValue={editingUser?.email}
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    شماره تلفن <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    required
+                    pattern="[0-9]{11}"
+                    placeholder="09123456789"
+                    defaultValue={editingUser?.phone}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    رمز عبور {editingUser ? '(خالی بگذارید برای عدم تغییر)' : <span className="text-red-500">*</span>}
+                  </label>
+                  <div className="relative mt-1">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      required={!editingUser}
+                      minLength={6}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPassword ? (
+                        <EyeSlashIcon className="h-5 w-5" />
+                      ) : (
+                        <EyeIcon className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">نقش</label>

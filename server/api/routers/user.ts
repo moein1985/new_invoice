@@ -38,6 +38,8 @@ export const userRouter = createTRPCRouter({
             id: true,
             username: true,
             fullName: true,
+            email: true,
+            phone: true,
             role: true,
             isActive: true,
             createdAt: true,
@@ -110,6 +112,8 @@ export const userRouter = createTRPCRouter({
         username: z.string().min(3).max(50),
         password: z.string().min(6),
         fullName: z.string().min(1),
+        email: z.string().email(),
+        phone: z.string().regex(/^[0-9]{11}$/, 'شماره تلفن باید 11 رقم باشد'),
         role: z.enum(['ADMIN', 'MANAGER', 'USER']),
         isActive: z.boolean().default(true),
       })
@@ -148,6 +152,8 @@ export const userRouter = createTRPCRouter({
       z.object({
         id: z.string().uuid(),
         fullName: z.string().min(1).optional(),
+        email: z.string().email().optional(),
+        phone: z.string().regex(/^[0-9]{11}$/, 'شماره تلفن باید 11 رقم باشد').optional(),
         role: z.enum(['ADMIN', 'MANAGER', 'USER']).optional(),
         isActive: z.boolean().optional(),
         password: z.string().min(6).optional(),
@@ -158,6 +164,8 @@ export const userRouter = createTRPCRouter({
 
       const updateData: {
         fullName?: string;
+        email?: string;
+        phone?: string;
         role?: 'ADMIN' | 'MANAGER' | 'USER';
         isActive?: boolean;
         password?: string;
