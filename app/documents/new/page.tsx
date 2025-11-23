@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
 import moment from 'moment-jalaali';
+import { useToast } from '@/components/ui/toast-provider';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 const DOC_TYPES = {
   TEMP_PROFORMA: 'پیش فاکتور موقت',
@@ -32,7 +34,9 @@ type DocumentItem = {
 export default function NewDocumentPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const toast = useToast();
   const [customerId, setCustomerId] = useState('');
+  const [projectName, setProjectName] = useState('');
   const [docType, setDocType] = useState('TEMP_PROFORMA');
   const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
   const [persianDate, setPersianDate] = useState('');
@@ -53,10 +57,10 @@ export default function NewDocumentPage() {
   ]);
 
   // تبدیل تاریخ میلادی به شمسی
+  const persianDateComputed = moment(docDate).format('jYYYY/jM/jD');
   useEffect(() => {
-    const jalali = moment(docDate).format('jYYYY/jM/jD');
-    setPersianDate(jalali);
-  }, [docDate]);
+    setPersianDate(persianDateComputed);
+  }, [persianDateComputed]);
 
   // Fetch customers for dropdown
   const { data: customersData } = trpc.customer.list.useQuery({
@@ -66,7 +70,11 @@ export default function NewDocumentPage() {
 
   const createMutation = trpc.document.create.useMutation({
     onSuccess: () => {
-      router.push('/documents');
+      toast.success('سند با موفقیت ایجاد شد');
+      setTimeout(() => router.push('/documents'), 500);
+    },
+    onError: (error) => {
+      toast.error('خطا در ایجاد سند', error.message);
     },
   });
 
@@ -145,18 +153,19 @@ export default function NewDocumentPage() {
     e.preventDefault();
     
     if (!customerId) {
-      alert('لطفاً مشتری را انتخاب کنید');
+      toast.warning('لطفاً مشتری را انتخاب کنید');
       return;
     }
 
     if (items.some((item) => !item.productName || item.quantity <= 0 || item.sellPrice < 0 || !item.unit || !item.supplier)) {
-      alert('لطفاً تمام اطلاعات اقلام را به درستی وارد کنید');
+      toast.warning('لطفاً تمام اطلاعات اقلام را به درستی وارد کنید');
       return;
     }
 
     createMutation.mutate({
       documentType: docType as any,
       customerId,
+      projectName: projectName || undefined,
       issueDate: new Date(docDate),
       notes: notes || undefined,
       discountAmount: 0,
@@ -177,6 +186,17 @@ export default function NewDocumentPage() {
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('fa-IR').format(amount) + ' ریال';
+  };
+
+  const toPersianNumber = (num: number | string) => {
+    const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    return num.toString().replace(/\d/g, (digit) => persianDigits[parseInt(digit)]);
+  };
+
+  const formatNumberWithCommas = (num: number | string): string => {
+    if (!num && num !== 0) return '';
+    const formatted = new Intl.NumberFormat('en-US').format(Number(num));
+    return toPersianNumber(formatted);
   };
 
   return (
@@ -230,6 +250,17 @@ export default function NewDocumentPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900">نام مسیر / پروژه</label>
+                <input
+                  type="text"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="مثال: تکمیل دیتا سنتر"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                  style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-900">تاریخ سند *</label>
@@ -319,30 +350,34 @@ export default function NewDocumentPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-900">تعداد *</label>
                       <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        value={item.quantity}
-                        onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                        type="text"
+                        value={formatNumberWithCommas(item.quantity)}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9.]/g, '');
+                          updateItem(item.id, 'quantity', parseFloat(value) || 0);
+                        }}
                         required
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
+                        style={{ fontFamily: 'Vazir, Tahoma, sans-serif', direction: 'ltr', textAlign: 'right' }}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-900">قیمت خرید *</label>
+                      <label className="block text-sm font-medium text-gray-900">قیمت خرید (ریال) *</label>
                       <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={item.purchasePrice}
-                        onChange={(e) => updateItem(item.id, 'purchasePrice', parseFloat(e.target.value) || 0)}
+                        type="text"
+                        value={formatNumberWithCommas(item.purchasePrice)}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9]/g, '');
+                          updateItem(item.id, 'purchasePrice', parseFloat(value) || 0);
+                        }}
                         required
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
+                        style={{ fontFamily: 'Vazir, Tahoma, sans-serif', direction: 'ltr', textAlign: 'right' }}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-900">
-                        قیمت فروش *
+                        قیمت فروش (ریال) *
                         <label className="mr-2 inline-flex items-center text-xs font-normal">
                           <input
                             type="checkbox"
@@ -354,26 +389,30 @@ export default function NewDocumentPage() {
                         </label>
                       </label>
                       <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={item.sellPrice}
-                        onChange={(e) => updateItem(item.id, 'sellPrice', parseFloat(e.target.value) || 0)}
+                        type="text"
+                        value={formatNumberWithCommas(item.sellPrice)}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9]/g, '');
+                          updateItem(item.id, 'sellPrice', parseFloat(value) || 0);
+                        }}
                         required
                         disabled={!item.isManualPrice}
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
+                        style={{ fontFamily: 'Vazir, Tahoma, sans-serif', direction: 'ltr', textAlign: 'right' }}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-900">درصد سود</label>
+                      <label className="block text-sm font-medium text-gray-900">درصد سود (%)</label>
                       <input
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        value={item.profitPercentage}
-                        onChange={(e) => updateItem(item.id, 'profitPercentage', parseFloat(e.target.value) || 0)}
+                        type="text"
+                        value={formatNumberWithCommas(item.profitPercentage)}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9.]/g, '');
+                          updateItem(item.id, 'profitPercentage', parseFloat(value) || 0);
+                        }}
                         disabled={item.isManualPrice}
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
+                        style={{ fontFamily: 'Vazir, Tahoma, sans-serif', direction: 'ltr', textAlign: 'right' }}
                       />
                     </div>
                   </div>
@@ -409,13 +448,15 @@ export default function NewDocumentPage() {
 
           {/* Actions */}
           <div className="flex gap-3">
-            <button
+            <LoadingButton
               type="submit"
-              disabled={createMutation.isPending}
-              className="flex-1 rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 disabled:opacity-50"
+              isLoading={createMutation.isPending}
+              variant="primary"
+              size="lg"
+              className="flex-1"
             >
-              {createMutation.isPending ? 'در حال ذخیره...' : 'ذخیره سند'}
-            </button>
+              ذخیره سند
+            </LoadingButton>
             <Link
               href="/documents"
               className="flex-1 rounded-lg bg-gray-300 px-6 py-3 text-center text-gray-700 hover:bg-gray-400"
@@ -423,12 +464,6 @@ export default function NewDocumentPage() {
               انصراف
             </Link>
           </div>
-
-          {createMutation.isError && (
-            <div className="rounded-lg bg-red-50 p-4 text-red-800">
-              خطا در ذخیره سند: {createMutation.error.message}
-            </div>
-          )}
         </form>
       </main>
     </div>

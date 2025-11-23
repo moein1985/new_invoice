@@ -2,7 +2,7 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 
 // Register fonts
-// @ts-ignore
+// @ts-expect-error - pdfMake vfs type issue
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
 
 // Use default fonts - Roboto has better Unicode support than custom fonts

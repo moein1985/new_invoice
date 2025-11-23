@@ -89,7 +89,7 @@ export const userRouter = createTRPCRouter({
           updatedAt: true,
           _count: {
             select: {
-              documents: true,
+              createdDocuments: true,
               approvals: true,
             },
           },
@@ -156,13 +156,20 @@ export const userRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, password, ...data } = input;
 
+      const updateData: {
+        fullName?: string;
+        role?: 'ADMIN' | 'MANAGER' | 'USER';
+        isActive?: boolean;
+        password?: string;
+      } = data;
+
       if (password) {
-        data.password = await bcrypt.hash(password, 10);
+        updateData.password = await bcrypt.hash(password, 10);
       }
 
       return ctx.prisma.user.update({
         where: { id },
-        data,
+        data: updateData,
         select: {
           id: true,
           username: true,

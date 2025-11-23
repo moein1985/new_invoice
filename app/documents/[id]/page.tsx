@@ -282,14 +282,6 @@ export default function DocumentDetailPage() {
                     {document.customer.phone}
                   </p>
                 </div>
-                {document.customer.company && (
-                  <div>
-                    <p className="text-sm text-gray-600">شرکت</p>
-                    <p className="font-bold" style={{ color: '#2a2a2a' }}>
-                      {document.customer.company}
-                    </p>
-                  </div>
-                )}
                 {document.customer.address && (
                   <div className="col-span-2">
                     <p className="text-sm text-gray-600">آدرس</p>
@@ -461,7 +453,7 @@ export default function DocumentDetailPage() {
             )}
 
             {/* Conversion Chain */}
-            {(document.convertedFrom || (document.convertedTo && document.convertedTo.length > 0)) && (
+            {(document.convertedFrom || document.convertedTo) && (
               <div className="mb-8 rounded-lg border bg-purple-50 p-6">
                 <h3 className="mb-4 text-xl font-bold" style={{ color: '#1a1a1a' }}>
                   زنجیره تبدیل
@@ -479,10 +471,11 @@ export default function DocumentDetailPage() {
                       </Link>
                     </div>
                   )}
-                  {document.convertedTo && document.convertedTo.length > 0 && (
+                  {document.convertedTo && (
                     <div>
                       <span className="text-sm text-gray-600">تبدیل شده به: </span>
-                      {document.convertedTo.map((doc: any) => (
+                      {/* @ts-expect-error - convertedTo type issue */}
+                      {document.convertedTo.map((doc) => (
                         <Link
                           key={doc.id}
                           href={`/documents/${doc.id}`}

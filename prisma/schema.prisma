@@ -67,6 +67,7 @@ model Document {
   documentNumber          String         @unique
   documentType            DocumentType
   customerId              String
+  projectName             String?
   issueDate               DateTime
   dueDate                 DateTime?
   totalAmount             Float          @default(0)

@@ -36,6 +36,7 @@ export default function EditDocumentPage() {
   const id = params?.id as string;
 
   const [customerId, setCustomerId] = useState('');
+  const [projectName, setProjectName] = useState('');
   const [docType, setDocType] = useState('TEMP_PROFORMA');
   const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
   const [persianDate, setPersianDate] = useState('');
@@ -86,6 +87,7 @@ export default function EditDocumentPage() {
   useEffect(() => {
     if (document && !isLoaded) {
       setCustomerId(document.customer.id);
+      setProjectName(document.projectName || '');
       setDocType(document.documentType);
       setDocDate(new Date(document.issueDate).toISOString().split('T')[0]);
       setNotes(document.notes || '');
@@ -205,6 +207,7 @@ export default function EditDocumentPage() {
     updateMutation.mutate({
       id,
       customerId,
+      projectName: projectName || undefined,
       issueDate: new Date(docDate),
       notes: notes || undefined,
       discountAmount: discountAmount || 0,
@@ -287,6 +290,19 @@ export default function EditDocumentPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
+                  نام مسیر / پروژه
+                </label>
+                <input
+                  type="text"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="مثال: تکمیل دیتا سنتر"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                  style={{ color: '#2a2a2a', fontFamily: 'Vazir, Tahoma, sans-serif' }}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>

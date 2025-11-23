@@ -5,19 +5,31 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
+import { useToast } from '@/components/ui/toast-provider';
+import { LoadingButton } from '@/components/ui/loading-button';
+import { Pagination } from '@/components/ui/pagination';
 
 export default function CustomersPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const toast = useToast();
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<any>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState<{
+    id: string;
+    code: string;
+    name: string;
+    phone: string | null;
+    email?: string | null;
+    address?: string | null;
+    _count?: { documents: number };
+  } | null>(null);
 
   // Fetch customers with search
   const { data: customers, isLoading, refetch } = trpc.customer.list.useQuery({
-    page: 1,
-    limit: 50,
+    page,
+    limit: 10,
     search: search || undefined,
   });
 
@@ -26,12 +38,10 @@ export default function CustomersPage() {
       refetch();
       setIsModalOpen(false);
       setEditingCustomer(null);
-      setToast({ message: 'مشتری با موفقیت اضافه شد', type: 'success' });
-      setTimeout(() => setToast(null), 3000);
+      toast.success('مشتری با موفقیت اضافه شد');
     },
     onError: (error) => {
-      setToast({ message: error.message, type: 'error' });
-      setTimeout(() => setToast(null), 5000);
+      toast.error('خطا در افزودن مشتری', error.message);
     },
   });
 
@@ -40,24 +50,20 @@ export default function CustomersPage() {
       refetch();
       setIsModalOpen(false);
       setEditingCustomer(null);
-      setToast({ message: 'مشتری با موفقیت ویرایش شد', type: 'success' });
-      setTimeout(() => setToast(null), 3000);
+      toast.success('مشتری با موفقیت ویرایش شد');
     },
     onError: (error) => {
-      setToast({ message: error.message, type: 'error' });
-      setTimeout(() => setToast(null), 5000);
+      toast.error('خطا در ویرایش مشتری', error.message);
     },
   });
 
   const deleteMutation = trpc.customer.delete.useMutation({
     onSuccess: () => {
       refetch();
-      setToast({ message: 'مشتری با موفقیت حذف شد', type: 'success' });
-      setTimeout(() => setToast(null), 3000);
+      toast.success('مشتری با موفقیت حذف شد');
     },
     onError: (error) => {
-      setToast({ message: error.message, type: 'error' });
-      setTimeout(() => setToast(null), 5000);
+      toast.error('خطا در حذف مشتری', error.message);
     },
   });
 
@@ -135,7 +141,7 @@ export default function CustomersPage() {
           />
         </div>
 
-        {/* Customers Table */}
+        {/* Customers - Table for desktop, Cards for mobile */}
         <div className="overflow-hidden bg-white shadow sm:rounded-lg">
           {isLoading ? (
             <div className="p-8 text-center">در حال بارگذاری...</div>
@@ -144,7 +150,9 @@ export default function CustomersPage() {
               هیچ مشتری‌ای یافت نشد
             </div>
           ) : (
-            <table className="min-w-full divide-y divide-gray-200">
+            <>
+              {/* Desktop Table View */}
+              <table className="hidden md:table min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
@@ -168,7 +176,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
-                {customers.data.map((customer: any) => (
+                {customers.data.map((customer) => (
                   <tr key={customer.id} className="hover:bg-gray-50">
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
                       {customer.code}
@@ -213,13 +221,79 @@ export default function CustomersPage() {
                 ))}
               </tbody>
             </table>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden divide-y divide-gray-200">
+              {customers.data.map((customer) => (
+                <div key={customer.id} className="p-4 hover:bg-gray-50">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900">{customer.name}</h3>
+                      <p className="text-sm text-gray-500 mt-1">کد: {customer.code}</p>
+                    </div>
+                    <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                      {customer._count?.documents || 0} سند
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                      {customer.phone}
+                    </div>
+                    {customer.email && (
+                      <div className="flex items-center text-sm text-gray-600">
+                        <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        {customer.email}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/customers/${customer.id}`}
+                      className="flex-1 text-center rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
+                    >
+                      مشاهده
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setEditingCustomer(customer);
+                        setIsModalOpen(true);
+                      }}
+                      className="flex-1 rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                    >
+                      ویرایش
+                    </button>
+                    <button
+                      onClick={() => handleDelete(customer.id, customer.name)}
+                      disabled={customer._count?.documents > 0}
+                      className="flex-1 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      حذف
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
           )}
         </div>
 
-        {/* Pagination info */}
-        {customers && (
-          <div className="mt-4 text-sm text-gray-500">
-            تعداد کل: {customers.meta.total} مشتری
+        {/* Pagination */}
+        {customers && customers.meta.totalPages > 1 && (
+          <div className="mt-4 rounded-lg bg-white shadow">
+            <Pagination
+              currentPage={page}
+              totalPages={customers.meta.totalPages}
+              totalItems={customers.meta.total}
+              itemsPerPage={customers.meta.limit}
+              onPageChange={(newPage) => setPage(newPage)}
+            />
           </div>
         )}
       </main>
@@ -261,7 +335,7 @@ export default function CustomersPage() {
                     type="text"
                     name="phone"
                     required
-                    defaultValue={editingCustomer?.phone}
+                    defaultValue={editingCustomer?.phone || ''}
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                   />
                 </div>
@@ -270,7 +344,7 @@ export default function CustomersPage() {
                   <input
                     type="email"
                     name="email"
-                    defaultValue={editingCustomer?.email}
+                    defaultValue={editingCustomer?.email || ''}
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                   />
                 </div>
@@ -279,25 +353,27 @@ export default function CustomersPage() {
                   <textarea
                     name="address"
                     rows={3}
-                    defaultValue={editingCustomer?.address}
+                    defaultValue={editingCustomer?.address || ''}
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                   />
                 </div>
                 <div className="flex gap-3">
-                  <button
+                  <LoadingButton
                     type="submit"
-                    disabled={createMutation.isPending || updateMutation.isPending}
-                    className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                    isLoading={createMutation.isPending || updateMutation.isPending}
+                    variant="primary"
+                    className="flex-1"
                   >
                     {editingCustomer ? 'ذخیره تغییرات' : 'افزودن'}
-                  </button>
-                  <button
+                  </LoadingButton>
+                  <LoadingButton
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="flex-1 rounded-lg bg-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-400"
+                    variant="secondary"
+                    className="flex-1"
                   >
                     انصراف
-                  </button>
+                  </LoadingButton>
                 </div>
               </form>
             </div>
@@ -305,28 +381,6 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-4 left-4 right-4 z-50 sm:left-auto sm:right-4 sm:w-96">
-          <div
-            className={`rounded-lg p-4 shadow-lg ${
-              toast.type === 'success'
-                ? 'bg-green-500 text-white'
-                : 'bg-red-500 text-white'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span>{toast.message}</span>
-              <button
-                onClick={() => setToast(null)}
-                className="mr-4 text-white hover:text-gray-200"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

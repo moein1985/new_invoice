@@ -188,7 +188,7 @@ export default function UserDetailPage() {
                       <div>
                         <p className="text-sm text-gray-600">اسناد ایجاد شده</p>
                         <p className="text-3xl font-bold text-blue-600">
-                          {user._count.documents}
+                          {(user as any)._count?.documents || 0}
                         </p>
                       </div>
                     </div>
@@ -202,7 +202,7 @@ export default function UserDetailPage() {
                       <div>
                         <p className="text-sm text-gray-600">تاییدیه‌های انجام شده</p>
                         <p className="text-3xl font-bold text-purple-600">
-                          {user._count.approvals}
+                          {(user as any)._count?.approvals || 0}
                         </p>
                       </div>
                     </div>

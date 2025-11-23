@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { TRPCProvider } from "@/lib/trpc";
 import { AuthProvider } from "@/components/auth-provider";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { ToastProvider } from "@/components/ui/toast-provider";
 
 export const metadata: Metadata = {
   title: "سیستم مدیریت فاکتور",
@@ -16,11 +18,15 @@ export default function RootLayout({
   return (
     <html lang="fa" dir="rtl">
       <body className="antialiased">
-        <AuthProvider>
-          <TRPCProvider>
-            {children}
-          </TRPCProvider>
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            <TRPCProvider>
+              <ToastProvider>
+                {children}
+              </ToastProvider>
+            </TRPCProvider>
+          </AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

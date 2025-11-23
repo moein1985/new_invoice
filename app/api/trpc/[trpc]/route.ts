@@ -13,11 +13,12 @@ async function handler(req: NextRequest) {
     console.log(`[Custom Handler] ${req.method} ${path}, batch: ${isBatch}`);
 
     // Create context
-    const ctx = await createTRPCContext({ req });
+    const ctx = await createTRPCContext({ headers: req.headers });
     const caller = appRouter.createCaller(ctx);
 
     // Parse input from URL query params (GET) or request body (POST)
     const inputParam = url.searchParams.get('input');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let batchedInputs: any = {};
     
     if (inputParam) {
@@ -31,6 +32,32 @@ async function handler(req: NextRequest) {
       console.log('[Custom Handler] Parsed input from body:', JSON.stringify(batchedInputs));
     }
 
+    // Transform date strings to Date objects
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function transformDates(obj: any): any {
+      if (!obj || typeof obj !== 'object') return obj;
+      
+      const transformed: any = Array.isArray(obj) ? [] : {};
+      
+      for (const key in obj) {
+        const value = obj[key];
+        
+        // Check if value is a date string
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value)) {
+          transformed[key] = new Date(value);
+        } else if (typeof value === 'object' && value !== null) {
+          transformed[key] = transformDates(value);
+        } else {
+          transformed[key] = value;
+        }
+      }
+      
+      return transformed;
+    }
+
+    // Apply date transformation to all inputs
+    batchedInputs = transformDates(batchedInputs);
+
     if (isBatch) {
       // Handle multiple procedures in batch
       // Path format: "procedure1.method1,procedure2.method2"
@@ -43,8 +70,8 @@ async function handler(req: NextRequest) {
         
         const [routerName, procedureName] = procedurePath.split('.');
         
-        // @ts-ignore - dynamic procedure access
-        const router = caller[routerName];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const router = (caller as any)[routerName];
         if (!router || !router[procedureName]) {
           throw new TRPCError({
             code: 'NOT_FOUND',
@@ -52,8 +79,8 @@ async function handler(req: NextRequest) {
           });
         }
 
-        // @ts-ignore - dynamic procedure call
-        const result = await router[procedureName](input);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await (router as any)[procedureName](input);
         results.push({ result: { data: result } });
       }
 
@@ -67,8 +94,8 @@ async function handler(req: NextRequest) {
       const [routerName, procedureName] = path.split('.');
       const input = batchedInputs['0'] !== undefined ? batchedInputs['0'] : batchedInputs;
       
-      // @ts-ignore - dynamic procedure access
-      const router = caller[routerName];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const router = (caller as any)[routerName];
       if (!router || !router[procedureName]) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -76,8 +103,8 @@ async function handler(req: NextRequest) {
         });
       }
 
-      // @ts-ignore - dynamic procedure call
-      const result = await router[procedureName](input);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (router as any)[procedureName](input);
 
       console.log('[Custom Handler] Success!');
       return new Response(JSON.stringify({ result: { data: result } }), {

@@ -155,15 +155,6 @@ export default function CustomerDetailPage() {
                   </div>
                 )}
 
-                {customer.company && (
-                  <div>
-                    <p className="text-sm text-gray-500">شرکت</p>
-                    <p className="font-bold" style={{ color: '#2a2a2a' }}>
-                      {customer.company}
-                    </p>
-                  </div>
-                )}
-
                 {customer.address && (
                   <div>
                     <p className="text-sm text-gray-500">آدرس</p>
@@ -241,7 +232,7 @@ export default function CustomerDetailPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {customer.documents?.map((doc: any) => (
+                    {customer.documents?.map((doc) => (
                       <Link
                         key={doc.id}
                         href={`/documents/${doc.id}`}

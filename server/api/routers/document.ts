@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import {
   createTRPCRouter,
   protectedProcedure,
@@ -113,6 +114,7 @@ export const documentRouter = createTRPCRouter({
       z.object({
         documentType: z.enum(['TEMP_PROFORMA', 'PROFORMA', 'INVOICE', 'RETURN_INVOICE', 'RECEIPT', 'OTHER']),
         customerId: z.string().uuid(),
+        projectName: z.string().optional(),
         issueDate: z.coerce.date(),
         dueDate: z.coerce.date().optional(),
         discountAmount: z.number().min(0).default(0),
@@ -173,6 +175,7 @@ export const documentRouter = createTRPCRouter({
       z.object({
         id: z.string().uuid(),
         customerId: z.string().uuid().optional(),
+        projectName: z.string().optional(),
         issueDate: z.date().optional(),
         dueDate: z.date().optional(),
         discountAmount: z.number().min(0).optional(),
@@ -392,88 +395,4 @@ export const documentRouter = createTRPCRouter({
 
     return approvals;
   }),
-
-  // Approve a document
-  approve: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
-      // Only admins and managers can approve
-      if (ctx.session.user.role !== 'ADMIN' && ctx.session.user.role !== 'MANAGER') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'شما دسترسی به تایید اسناد ندارید',
-        });
-      }
-
-      const approval = await ctx.prisma.approval.findUnique({
-        where: { id: input.id },
-      });
-
-      if (!approval) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'درخواست تایید پیدا نشد',
-        });
-      }
-
-      // Update approval status
-      await ctx.prisma.approval.update({
-        where: { id: input.id },
-        data: { status: 'APPROVED' },
-      });
-
-      // Update document status
-      await ctx.prisma.document.update({
-        where: { id: approval.documentId },
-        data: { approvalStatus: 'APPROVED' },
-      });
-
-      return { success: true };
-    }),
-
-  // Reject a document
-  reject: protectedProcedure
-    .input(
-      z.object({
-        id: z.string().uuid(),
-        comment: z.string().min(1, 'دلیل رد سند الزامی است'),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Only admins and managers can reject
-      if (ctx.session.user.role !== 'ADMIN' && ctx.session.user.role !== 'MANAGER') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'شما دسترسی به رد اسناد ندارید',
-        });
-      }
-
-      const approval = await ctx.prisma.approval.findUnique({
-        where: { id: input.id },
-      });
-
-      if (!approval) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'درخواست تایید پیدا نشد',
-        });
-      }
-
-      // Update approval status with comment
-      await ctx.prisma.approval.update({
-        where: { id: input.id },
-        data: {
-          status: 'REJECTED',
-          comment: input.comment,
-        },
-      });
-
-      // Update document status
-      await ctx.prisma.document.update({
-        where: { id: approval.documentId },
-        data: { approvalStatus: 'REJECTED' },
-      });
-
-      return { success: true };
-    }),
 });
