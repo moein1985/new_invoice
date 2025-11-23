@@ -106,10 +106,8 @@ export default function LoginPage() {
           </button>
 
           <div className="text-center text-sm text-gray-600 space-y-1">
-            <p className="font-medium">حساب‌های تست:</p>
+            <p className="font-medium">حساب مدیر سیستم:</p>
             <p>👤 admin / admin123</p>
-            <p>👤 manager / admin123</p>
-            <p>👤 user / admin123</p>
           </div>
         </form>
       </div>
