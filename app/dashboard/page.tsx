@@ -224,25 +224,23 @@ export default function DashboardPage() {
             </Link>
           )}
 
-          {/* Backup Card (Admin only) */}
-          {session.user.role === 'ADMIN' && (
-            <Link
-              href="/backup"
-              className="block rounded-lg bg-white p-6 shadow hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    بکاپ و بازیابی
-                  </h2>
-                  <p className="mt-2 text-sm text-gray-600">
-                    پشتیبان‌گیری و بازیابی داده‌ها
-                  </p>
-                </div>
-                <div className="text-4xl">💾</div>
+          {/* Backup Card - همه کاربران */}
+          <Link
+            href="/backup"
+            className="block rounded-lg bg-white p-6 shadow hover:shadow-lg transition-shadow"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  بکاپ و بازیابی
+                </h2>
+                <p className="mt-2 text-sm text-gray-600">
+                  پشتیبان‌گیری{session.user.role === 'ADMIN' ? ' و بازیابی' : ''} داده‌ها
+                </p>
               </div>
-            </Link>
-          )}
+              <div className="text-4xl">💾</div>
+            </div>
+          </Link>
         </div>
 
         {/* آخرین اسناد */}

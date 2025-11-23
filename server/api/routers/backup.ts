@@ -3,8 +3,8 @@ import { createTRPCRouter, protectedProcedure, adminProcedure } from '../trpc';
 import { prisma } from '@/lib/prisma';
 
 export const backupRouter = createTRPCRouter({
-  // Export database to JSON
-  exportDatabase: adminProcedure.mutation(async () => {
+  // Export database to JSON - همه کاربران می‌توانند بکاپ بگیرند
+  exportDatabase: protectedProcedure.mutation(async () => {
     try {
       const [customers, documents, users, documentItems] = await Promise.all([
         prisma.customer.findMany(),

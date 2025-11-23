@@ -66,20 +66,7 @@ export default function BackupPage() {
     return null;
   }
 
-  if (session.user.role !== 'ADMIN') {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <AlertTriangle className="mx-auto h-12 w-12 text-red-500" />
-          <h2 className="mt-4 text-2xl font-bold">دسترسی محدود</h2>
-          <p className="mt-2 text-gray-600">فقط ادمین‌ها می‌توانند به این بخش دسترسی داشته باشند</p>
-          <Link href="/dashboard" className="mt-4 inline-block text-blue-600 hover:text-blue-700">
-            بازگشت به داشبورد
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  // همه کاربران می‌توانند به این صفحه دسترسی داشته باشند
 
   const handleExport = () => {
     exportMutation.mutate();
@@ -173,15 +160,16 @@ export default function BackupPage() {
             </LoadingButton>
           </div>
 
-          {/* Import Section */}
-          <div className="bg-white shadow sm:rounded-lg p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Upload className="h-6 w-6 text-green-600" />
-              <h2 className="text-xl font-bold text-gray-900">بازیابی از بکاپ</h2>
-            </div>
-            <p className="text-gray-600 mb-4">
-              فایل بکاپ (JSON) خود را انتخاب کنید تا داده‌ها بازیابی شوند.
-            </p>
+          {/* Import Section - فقط برای مدیر */}
+          {session.user.role === 'ADMIN' && (
+            <div className="bg-white shadow sm:rounded-lg p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Upload className="h-6 w-6 text-green-600" />
+                <h2 className="text-xl font-bold text-gray-900">بازیابی از بکاپ</h2>
+              </div>
+              <p className="text-gray-600 mb-4">
+                فایل بکاپ (JSON) خود را انتخاب کنید تا داده‌ها بازیابی شوند.
+              </p>
 
             {/* Warning */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
@@ -238,18 +226,19 @@ export default function BackupPage() {
               </label>
             </div>
 
-            {/* Import Button */}
-            <LoadingButton
-              onClick={handleImport}
-              isLoading={isImporting || importMutation.isPending}
-              variant="primary"
-              className="flex items-center gap-2"
-              disabled={!selectedFile}
-            >
-              <Upload className="h-4 w-4" />
-              بازیابی از بکاپ
-            </LoadingButton>
-          </div>
+              {/* Import Button */}
+              <LoadingButton
+                onClick={handleImport}
+                isLoading={isImporting || importMutation.isPending}
+                variant="primary"
+                className="flex items-center gap-2"
+                disabled={!selectedFile}
+              >
+                <Upload className="h-4 w-4" />
+                بازیابی از بکاپ
+              </LoadingButton>
+            </div>
+          )}
 
           {/* Info Section */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -258,7 +247,7 @@ export default function BackupPage() {
               <li>بکاپ‌های منظم از داده‌های خود تهیه کنید</li>
               <li>فایل‌های بکاپ را در مکان امن ذخیره کنید</li>
               <li>قبل از هر بروزرسانی مهم، حتما بکاپ بگیرید</li>
-              <li>کاربران عادی نمی‌توانند بکاپ تهیه یا بازیابی کنند (فقط ادمین)</li>
+              <li>همه کاربران می‌توانند بکاپ بگیرند، اما فقط مدیر می‌تواند بازگردانی (restore) انجام دهد</li>
             </ul>
           </div>
         </div>
