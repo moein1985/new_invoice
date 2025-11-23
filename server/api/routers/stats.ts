@@ -19,9 +19,12 @@ export const statsRouter = createTRPCRouter({
       // تعداد کل اسناد
       ctx.prisma.document.count(),
 
-      // تعداد تاییدیه‌های در انتظار
+      // تعداد تاییدیه‌های در انتظار (فقط پیش‌فاکتورهای موقت)
       ctx.prisma.document.count({
-        where: { approvalStatus: 'PENDING' },
+        where: { 
+          approvalStatus: 'PENDING',
+          documentType: 'TEMP_PROFORMA',
+        },
       }),
 
       // تعداد کاربران (فقط برای Admin)

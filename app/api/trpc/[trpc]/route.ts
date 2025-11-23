@@ -66,7 +66,9 @@ async function handler(req: NextRequest) {
 
       for (let i = 0; i < procedures.length; i++) {
         const procedurePath = procedures[i];
-        const input = batchedInputs[i.toString()];
+        const rawInput = batchedInputs[i.toString()];
+        // Extract actual input from superjson format
+        const input = rawInput?.json !== undefined ? rawInput.json : rawInput;
         
         const [routerName, procedureName] = procedurePath.split('.');
         
@@ -81,7 +83,7 @@ async function handler(req: NextRequest) {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = await (router as any)[procedureName](input);
-        results.push({ result: { data: result } });
+        results.push({ result: { data: { json: result } } });
       }
 
       console.log('[Custom Handler] Batch success!');
@@ -92,7 +94,9 @@ async function handler(req: NextRequest) {
     } else {
       // Single procedure call
       const [routerName, procedureName] = path.split('.');
-      const input = batchedInputs['0'] !== undefined ? batchedInputs['0'] : batchedInputs;
+      const rawInput = batchedInputs['0'] !== undefined ? batchedInputs['0'] : batchedInputs;
+      // Extract actual input from superjson format
+      const input = rawInput?.json !== undefined ? rawInput.json : rawInput;
       
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const router = (caller as any)[routerName];
@@ -107,7 +111,7 @@ async function handler(req: NextRequest) {
       const result = await (router as any)[procedureName](input);
 
       console.log('[Custom Handler] Success!');
-      return new Response(JSON.stringify({ result: { data: result } }), {
+      return new Response(JSON.stringify({ result: { data: { json: result } } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });

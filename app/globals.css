@@ -1,8 +1,44 @@
 @import "tailwindcss";
+@import "./vazirmatn.css";
 
 :root {
+  /* Light theme colors */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #1a1a1a;
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --border: #e5e7eb;
+  --input: #ffffff;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #1a1a1a;
+  --muted: #f9fafb;
+  --muted-foreground: #6b7280;
+  --accent: #f3f4f6;
+  --accent-foreground: #1a1a1a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+}
+
+[data-theme="dark"] {
+  /* Dark theme colors */
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card: #1a1a1a;
+  --card-foreground: #ededed;
+  --border: #374151;
+  --input: #1a1a1a;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1f2937;
+  --secondary-foreground: #ededed;
+  --muted: #111827;
+  --muted-foreground: #9ca3af;
+  --accent: #1f2937;
+  --accent-foreground: #ededed;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
 }
 
 @theme inline {
@@ -12,15 +48,151 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  font-family: Tahoma, 'Segoe UI', Arial, sans-serif !important;
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--foreground) !important;
+  font-family: Tahoma, 'Segoe UI', Arial, sans-serif !important;
+  direction: rtl;
+  text-align: right;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+[data-theme="dark"] * {
+  color: var(--foreground) !important;
+}
+
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6 {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] body {
+  background: var(--background);
+  color: var(--foreground) !important;
+}
+
+/* سایه‌ها برای کارت‌ها در حالت تاریک */
+[data-theme="dark"] .shadow,
+[data-theme="dark"] .shadow-sm,
+[data-theme="dark"] .shadow-md,
+[data-theme="dark"] .shadow-lg {
+  box-shadow: 0 1px 3px 0 rgba(255, 255, 255, 0.1), 0 1px 2px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* فونت برای تمام عناصر */
+input,
+textarea,
+select,
+button,
+label,
+span,
+div,
+p,
+h1, h2, h3, h4, h5, h6 {
+  font-family: Tahoma, 'Segoe UI', Arial, sans-serif !important;
+  direction: rtl;
+  font-weight: 400;
+}
+
+/* رنگ تیره‌تر برای سرتیترها */
+h1, h2, h3, h4, h5, h6 {
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+
+/* استایل‌های دکمه theme toggle */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-toggle:hover {
+  background: var(--accent);
+  transform: scale(1.05);
+}
+
+.theme-toggle:active {
+  transform: scale(0.95);
+}
+
+[data-theme="dark"] .theme-toggle {
+  background: var(--secondary);
+  border-color: var(--border);
+}
+
+/* استایل‌های کارت‌ها */
+[data-theme="dark"] .bg-white {
+  background-color: var(--card) !important;
+}
+
+[data-theme="dark"] .border {
+  border-color: var(--border) !important;
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  background-color: var(--input) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+[data-theme="dark"] button {
+  border-color: var(--border) !important;
+}
+
+[data-theme="dark"] .text-gray-600 {
+  color: var(--muted-foreground) !important;
+}
+
+[data-theme="dark"] .text-gray-700 {
+  color: var(--foreground) !important;
+}
+
+[data-theme="dark"] .text-gray-900 {
+  color: var(--foreground) !important;
+}
+
+/* رفع مشکل placeholder */
+input::placeholder,
+textarea::placeholder {
+  font-family: 'Vazirmatn', 'Tahoma', 'Arial', sans-serif !important;
+  direction: rtl;
+  text-align: right;
+  opacity: 0.5;
+}
+
+/* رفع مشکل number input */
+input[type="number"] {
+  direction: ltr;
+  text-align: left;
+}
+
+/* رفع مشکل input fields */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+textarea {
+  text-align: right !important;
+  direction: rtl !important;
 }

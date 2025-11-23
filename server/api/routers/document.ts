@@ -8,12 +8,12 @@ import {
 
 const documentItemSchema = z.object({
   productName: z.string().min(1),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   quantity: z.number().positive(),
   unit: z.string().min(1),
   purchasePrice: z.number().min(0),
   sellPrice: z.number().min(0),
-  profitPercentage: z.number().optional(),
+  profitPercentage: z.number().optional().nullable(),
   supplier: z.string().min(1),
   isManualPrice: z.boolean().default(false),
 });
@@ -25,9 +25,9 @@ export const documentRouter = createTRPCRouter({
       z.object({
         page: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(10),
-        documentType: z.enum(['TEMP_PROFORMA', 'PROFORMA', 'INVOICE', 'RETURN_INVOICE', 'RECEIPT', 'OTHER']).optional(),
-        approvalStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional(),
-        customerId: z.string().uuid().optional(),
+        documentType: z.enum(['TEMP_PROFORMA', 'PROFORMA', 'INVOICE', 'RETURN_INVOICE', 'RECEIPT', 'OTHER']).optional().nullable(),
+        approvalStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional().nullable(),
+        customerId: z.string().uuid().optional().nullable(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -114,12 +114,12 @@ export const documentRouter = createTRPCRouter({
       z.object({
         documentType: z.enum(['TEMP_PROFORMA', 'PROFORMA', 'INVOICE', 'RETURN_INVOICE', 'RECEIPT', 'OTHER']),
         customerId: z.string().uuid(),
-        projectName: z.string().optional(),
+        projectName: z.string().optional().nullable(),
         issueDate: z.coerce.date(),
-        dueDate: z.coerce.date().optional(),
+        dueDate: z.coerce.date().optional().nullable(),
         discountAmount: z.number().min(0).default(0),
-        notes: z.string().optional(),
-        attachment: z.string().optional(),
+        notes: z.string().optional().nullable(),
+        attachment: z.string().optional().nullable(),
         defaultProfitPercentage: z.number().default(20),
         items: z.array(documentItemSchema).min(1),
       })
@@ -151,21 +151,42 @@ export const documentRouter = createTRPCRouter({
       const totalAmount = items.reduce((sum, item) => sum + item.sellPrice * item.quantity, 0);
       const finalAmount = totalAmount - input.discountAmount;
 
-      return ctx.prisma.document.create({
-        data: {
-          ...documentData,
-          documentNumber,
-          totalAmount,
-          finalAmount,
-          createdById: ctx.session.user.id,
-          items: {
-            create: items,
+      // تعیین وضعیت تایید: فقط TEMP_PROFORMA نیاز به تایید دارد
+      const approvalStatus = input.documentType === 'TEMP_PROFORMA' ? 'PENDING' : 'APPROVED';
+
+      return ctx.prisma.$transaction(async (tx) => {
+        // ایجاد سند
+        const document = await tx.document.create({
+          data: {
+            ...documentData,
+            documentNumber,
+            totalAmount,
+            finalAmount,
+            approvalStatus,
+            createdById: ctx.session.user.id,
+            items: {
+              create: items,
+            },
           },
-        },
-        include: {
-          items: true,
-          customer: true,
-        },
+          include: {
+            items: true,
+            customer: true,
+          },
+        });
+
+        // اگر TEMP_PROFORMA است، approval ایجاد کن
+        if (input.documentType === 'TEMP_PROFORMA') {
+          await tx.approval.create({
+            data: {
+              documentId: document.id,
+              userId: ctx.session.user.id,
+              status: 'PENDING',
+              comment: 'در انتظار تایید',
+            },
+          });
+        }
+
+        return document;
       });
     }),
 
@@ -175,43 +196,108 @@ export const documentRouter = createTRPCRouter({
       z.object({
         id: z.string().uuid(),
         customerId: z.string().uuid().optional(),
-        projectName: z.string().optional(),
+        projectName: z.string().optional().nullable(),
         issueDate: z.date().optional(),
-        dueDate: z.date().optional(),
+        dueDate: z.date().optional().nullable(),
         discountAmount: z.number().min(0).optional(),
-        notes: z.string().optional(),
-        attachment: z.string().optional(),
+        notes: z.string().optional().nullable(),
+        attachment: z.string().optional().nullable(),
         items: z.array(documentItemSchema).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const { id, items, ...data } = input;
 
-      // Recalculate if items changed
-      if (items) {
-        const totalAmount = items.reduce((sum, item) => sum + item.sellPrice * item.quantity, 0);
-        const finalAmount = totalAmount - (data.discountAmount ?? 0);
-
-        return ctx.prisma.document.update({
+      return ctx.prisma.$transaction(async (tx) => {
+        // بررسی اینکه آیا این پیش‌فاکتور موقت تایید شده است
+        const document = await tx.document.findUnique({
           where: { id },
-          data: {
-            ...data,
-            totalAmount,
-            finalAmount,
-            items: {
-              deleteMany: {},
-              create: items,
-            },
-          },
-          include: {
-            items: true,
+          select: {
+            documentType: true,
+            approvalStatus: true,
+            convertedTo: true,
           },
         });
-      }
 
-      return ctx.prisma.document.update({
-        where: { id },
-        data,
+        // اگر پیش‌فاکتور موقت تایید شده ویرایش شود، اسناد مرتبط (پیش‌فاکتور و فاکتور) حذف می‌شوند
+        if (document?.documentType === 'TEMP_PROFORMA' && document?.approvalStatus === 'APPROVED') {
+          // پیدا کردن تمام اسناد مرتبط
+          const relatedDocs = await tx.document.findMany({
+            where: {
+              convertedFromId: id,
+            },
+            select: {
+              id: true,
+              convertedTo: true,
+            },
+          });
+
+          // حذف اسناد مرتبط به صورت بازگشتی
+          for (const relatedDoc of relatedDocs) {
+            // اگر این سند هم سند دیگری از روی خودش ساخته باشد، آن را هم حذف کن
+            if (relatedDoc.convertedTo) {
+              await tx.document.delete({
+                where: { id: relatedDoc.convertedTo.id },
+              });
+            }
+            // حذف خود سند
+            await tx.document.delete({
+              where: { id: relatedDoc.id },
+            });
+          }
+
+          // حذف تمام approval های قبلی این سند
+          await tx.approval.deleteMany({
+            where: {
+              documentId: id,
+            },
+          });
+
+          // بازگشت به حالت در انتظار تایید
+          await tx.document.update({
+            where: { id },
+            data: {
+              approvalStatus: 'PENDING',
+            },
+          });
+
+          // ایجاد approval جدید برای تایید مجدد
+          await tx.approval.create({
+            data: {
+              documentId: id,
+              userId: ctx.session.user.id,
+              status: 'PENDING',
+              comment: 'سند ویرایش شد و نیاز به تایید مجدد دارد',
+            },
+          });
+        }
+
+        // Recalculate if items changed
+        if (items) {
+          const totalAmount = items.reduce((sum, item) => sum + item.sellPrice * item.quantity, 0);
+          const finalAmount = totalAmount - (data.discountAmount ?? 0);
+
+          return tx.document.update({
+            where: { id },
+            data: {
+              ...data,
+              totalAmount,
+              finalAmount,
+              items: {
+                deleteMany: {},
+                create: items,
+              },
+            },
+            include: {
+              items: true,
+            },
+          });
+        }
+
+        return tx.document.update({
+          where: { id },
+          data,
+        });
       });
     }),
 
@@ -228,7 +314,7 @@ export const documentRouter = createTRPCRouter({
   approve: managerProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string().uuid(), // document ID
         comment: z.string().optional(),
       })
     )
@@ -258,7 +344,7 @@ export const documentRouter = createTRPCRouter({
   reject: managerProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string().uuid(), // document ID
         comment: z.string().min(1, 'دلیل رد الزامی است'),
       })
     )
@@ -311,6 +397,11 @@ export const documentRouter = createTRPCRouter({
         throw new Error('تبدیل این نوع سند مجاز نیست');
       }
 
+      // حذف document قبلی که از این سند ساخته شده (اگر وجود داشته باشد)
+      await ctx.prisma.document.deleteMany({
+        where: { convertedFromId: sourceDoc.id },
+      });
+
       // Generate new document number
       const prefix = {
         TEMP_PROFORMA: 'TMP',
@@ -331,6 +422,10 @@ export const documentRouter = createTRPCRouter({
 
       const documentNumber = `${prefix}-${year}-${String(count + 1).padStart(6, '0')}`;
 
+      // تعیین وضعیت تایید: فقط TEMP_PROFORMA نیاز به تایید دارد
+      // بقیه اسناد (PROFORMA, INVOICE, ...) خودکار APPROVED هستند
+      const approvalStatus = input.toType === 'TEMP_PROFORMA' ? 'PENDING' : 'APPROVED';
+
       return ctx.prisma.document.create({
         data: {
           documentNumber,
@@ -343,6 +438,7 @@ export const documentRouter = createTRPCRouter({
           finalAmount: sourceDoc.finalAmount,
           notes: sourceDoc.notes,
           defaultProfitPercentage: sourceDoc.defaultProfitPercentage,
+          approvalStatus,
           convertedFromId: sourceDoc.id,
           createdById: ctx.session.user.id,
           items: {
@@ -379,6 +475,9 @@ export const documentRouter = createTRPCRouter({
     const approvals = await ctx.prisma.approval.findMany({
       where: {
         status: 'PENDING',
+        document: {
+          documentType: 'TEMP_PROFORMA',
+        },
       },
       include: {
         document: {

@@ -215,14 +215,14 @@ export default function ApprovalsPage() {
                       {doc.approvalStatus === 'PENDING' && (
                         <>
                           <button
-                            onClick={() => handleApprove(approval.id, doc.documentNumber)}
+                            onClick={() => handleApprove(doc.id, doc.documentNumber)}
                             disabled={approveMutation.isPending || rejectMutation.isPending || convertMutation.isPending}
                             className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50 whitespace-nowrap"
                           >
                             ✓ تایید
                           </button>
                           <button
-                            onClick={() => handleReject(approval.id, doc.documentNumber)}
+                            onClick={() => handleReject(doc.id, doc.documentNumber)}
                             disabled={approveMutation.isPending || rejectMutation.isPending || convertMutation.isPending}
                             className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
                           >

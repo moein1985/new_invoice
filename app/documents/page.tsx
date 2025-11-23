@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
 import moment from 'moment-jalaali';
+import { exportDocumentsToExcel } from '@/lib/services/excel-export';
+import { useToast } from '@/components/ui/toast-provider';
+import { Download } from 'lucide-react';
 
 const DOC_TYPES = {
   TEMP_PROFORMA: 'پیش فاکتور موقت',
@@ -30,6 +33,7 @@ type DocumentType = 'TEMP_PROFORMA' | 'PROFORMA' | 'INVOICE' | 'RETURN_INVOICE' 
 export default function DocumentsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const toast = useToast();
   const [selectedType, setSelectedType] = useState<DocumentType | ''>('');
   const [search, setSearch] = useState('');
   const [typeFilters, setTypeFilters] = useState<Set<DocumentType>>(new Set());
@@ -162,12 +166,36 @@ export default function DocumentsPage() {
                 بازگشت ←
               </Link>
             </div>
-            <Link
-              href="/documents/new"
-              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-            >
-              + ایجاد سند جدید
-            </Link>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  if (filteredDocuments && filteredDocuments.length > 0) {
+                    const docsForExport = filteredDocuments.map((doc: any) => ({
+                      id: doc.id,
+                      type: doc.documentType,
+                      approvalStatus: doc.approvalStatus,
+                      approvalOrder: doc.approvalOrder,
+                      customerName: doc.customerName,
+                      totalAmount: doc.totalAmount,
+                      createdAt: doc.createdAt,
+                    }));
+                    exportDocumentsToExcel(docsForExport, 'documents.xlsx');
+                    toast.success('فایل Excel با موفقیت دانلود شد');
+                  }
+                }}
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                disabled={!filteredDocuments?.length}
+              >
+                <Download className="h-4 w-4" />
+                دانلود Excel
+              </button>
+              <Link
+                href="/documents/new"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+              >
+                + ایجاد سند جدید
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -336,12 +364,30 @@ export default function DocumentsPage() {
                           >
                             مشاهده
                           </Link>
-                          <button
-                            onClick={() => handleEditClick(doc)}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            ویرایش
-                          </button>
+                          {/* فقط پیش‌فاکتور موقت قابل ویرایش است */}
+                          {doc.documentType === 'TEMP_PROFORMA' && (
+                            <button
+                              onClick={() => handleEditClick(doc)}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              ویرایش
+                            </button>
+                          )}
+                          {/* پیش‌فاکتور و فاکتور قابل ویرایش نیستند، فقط پیش‌فاکتور موقت آنها */}
+                          {(doc.documentType === 'PROFORMA' || doc.documentType === 'INVOICE') && (
+                            <span className="text-gray-400 cursor-not-allowed" title="برای ویرایش، پیش‌فاکتور موقت مربوطه را ویرایش کنید">
+                              ویرایش غیرفعال
+                            </span>
+                          )}
+                          {/* سایر اسناد قابل ویرایش هستند */}
+                          {doc.documentType !== 'TEMP_PROFORMA' && doc.documentType !== 'PROFORMA' && doc.documentType !== 'INVOICE' && (
+                            <button
+                              onClick={() => handleEditClick(doc)}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              ویرایش
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDelete(doc.id, doc.documentNumber)}
                             className="text-red-600 hover:text-red-900"

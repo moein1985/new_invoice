@@ -474,16 +474,12 @@ export default function DocumentDetailPage() {
                   {document.convertedTo && (
                     <div>
                       <span className="text-sm text-gray-600">تبدیل شده به: </span>
-                      {/* @ts-expect-error - convertedTo type issue */}
-                      {document.convertedTo.map((doc) => (
-                        <Link
-                          key={doc.id}
-                          href={`/documents/${doc.id}`}
-                          className="text-blue-600 hover:underline font-bold ml-2"
-                        >
-                          {DOC_TYPES[doc.documentType]} - {doc.documentNumber}
-                        </Link>
-                      ))}
+                      <Link
+                        href={`/documents/${document.convertedTo.id}`}
+                        className="text-blue-600 hover:underline font-bold ml-2"
+                      >
+                        {DOC_TYPES[document.convertedTo.documentType]} - {document.convertedTo.documentNumber}
+                      </Link>
                     </div>
                   )}
                 </div>

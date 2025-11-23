@@ -4,6 +4,9 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { GlobalSearch } from '@/components/ui/global-search';
+import { NotificationBell } from '@/components/ui/notification-bell';
 
 const DOC_TYPES: Record<string, string> = {
   TEMP_PROFORMA: 'پیش‌فاکتور موقت',
@@ -53,6 +56,9 @@ export default function DashboardPage() {
               داشبورد
             </h1>
             <div className="flex items-center gap-4">
+              <GlobalSearch />
+              <NotificationBell />
+              <ThemeToggle />
               <div className="text-sm">
                 <p className="font-medium text-gray-900">{session.user.name}</p>
                 <p className="text-gray-500">{session.user.role}</p>
@@ -194,6 +200,26 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 <div className="text-4xl">⚙️</div>
+              </div>
+            </Link>
+          )}
+
+          {/* Backup Card (Admin only) */}
+          {session.user.role === 'ADMIN' && (
+            <Link
+              href="/backup"
+              className="block rounded-lg bg-white p-6 shadow hover:shadow-lg transition-shadow"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    بکاپ و بازیابی
+                  </h2>
+                  <p className="mt-2 text-sm text-gray-600">
+                    پشتیبان‌گیری و بازیابی داده‌ها
+                  </p>
+                </div>
+                <div className="text-4xl">💾</div>
               </div>
             </Link>
           )}

@@ -350,13 +350,15 @@ export default function NewDocumentPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-900">تعداد *</label>
                       <input
-                        type="text"
-                        value={formatNumberWithCommas(item.quantity)}
+                        type="number"
+                        value={item.quantity || ''}
                         onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9.]/g, '');
+                          const value = e.target.value;
                           updateItem(item.id, 'quantity', parseFloat(value) || 0);
                         }}
                         required
+                        min="0"
+                        step="1"
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
                         style={{ fontFamily: 'Vazir, Tahoma, sans-serif', direction: 'ltr', textAlign: 'right' }}
                       />
@@ -364,13 +366,15 @@ export default function NewDocumentPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-900">قیمت خرید (ریال) *</label>
                       <input
-                        type="text"
-                        value={formatNumberWithCommas(item.purchasePrice)}
+                        type="number"
+                        value={item.purchasePrice || ''}
                         onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9]/g, '');
+                          const value = e.target.value;
                           updateItem(item.id, 'purchasePrice', parseFloat(value) || 0);
                         }}
                         required
+                        min="0"
+                        step="1"
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
                         style={{ fontFamily: 'Vazir, Tahoma, sans-serif', direction: 'ltr', textAlign: 'right' }}
                       />
@@ -389,14 +393,16 @@ export default function NewDocumentPage() {
                         </label>
                       </label>
                       <input
-                        type="text"
-                        value={formatNumberWithCommas(item.sellPrice)}
+                        type="number"
+                        value={item.sellPrice || ''}
                         onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9]/g, '');
+                          const value = e.target.value;
                           updateItem(item.id, 'sellPrice', parseFloat(value) || 0);
                         }}
                         required
                         disabled={!item.isManualPrice}
+                        min="0"
+                        step="1"
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
                         style={{ fontFamily: 'Vazir, Tahoma, sans-serif', direction: 'ltr', textAlign: 'right' }}
                       />
@@ -404,13 +410,15 @@ export default function NewDocumentPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-900">درصد سود (%)</label>
                       <input
-                        type="text"
-                        value={formatNumberWithCommas(item.profitPercentage)}
+                        type="number"
+                        value={item.profitPercentage || ''}
                         onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9.]/g, '');
+                          const value = e.target.value;
                           updateItem(item.id, 'profitPercentage', parseFloat(value) || 0);
                         }}
                         disabled={item.isManualPrice}
+                        min="0"
+                        step="0.01"
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
                         style={{ fontFamily: 'Vazir, Tahoma, sans-serif', direction: 'ltr', textAlign: 'right' }}
                       />

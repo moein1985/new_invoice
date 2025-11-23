@@ -25,8 +25,9 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  createdDocuments Document[] @relation("CreatedBy")
+  createdDocuments Document[]      @relation("CreatedBy")
   approvals        Approval[]
+  notifications    Notification[]
   
   @@map("users")
 }
@@ -156,4 +157,37 @@ model Approval {
   user        User           @relation(fields: [userId], references: [id])
 
   @@map("approvals")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id          String             @id @default(uuid())
+  userId      String
+  type        NotificationType
+  title       String
+  message     String
+  link        String?
+  isRead      Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+
+  // Relations
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  APPROVAL_REQUEST
+  APPROVAL_APPROVED
+  APPROVAL_REJECTED
+  DOCUMENT_CREATED
+  DOCUMENT_UPDATED
+  SYSTEM
 }

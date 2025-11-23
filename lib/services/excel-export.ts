@@ -309,3 +309,218 @@ export const generateDocumentExcel = async (document: Document) => {
   link.click();
   window.URL.revokeObjectURL(url);
 };
+
+// Export customers list to Excel
+interface CustomerForExport {
+  id: string;
+  name: string;
+  code: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  createdAt: Date;
+}
+
+export const exportCustomersToExcel = async (
+  customers: CustomerForExport[],
+  filename: string = 'customers.xlsx'
+) => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('مشتریان', {
+    views: [{ rightToLeft: true }],
+  });
+
+  // Add header
+  const headerRow = worksheet.addRow([
+    'کد مشتری',
+    'نام مشتری',
+    'تلفن',
+    'ایمیل',
+    'آدرس',
+    'تاریخ ایجاد',
+  ]);
+
+  // Style header
+  headerRow.font = { bold: true, size: 11 };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF3B82F6' },
+  };
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'thin' },
+      right: { style: 'thin' },
+    };
+  });
+
+  // Add data rows
+  customers.forEach((customer) => {
+    const row = worksheet.addRow([
+      customer.code,
+      customer.name,
+      customer.phone || '-',
+      customer.email || '-',
+      customer.address || '-',
+      new Date(customer.createdAt).toLocaleDateString('fa-IR'),
+    ]);
+
+    row.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' },
+      };
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
+    });
+  });
+
+  // Set column widths
+  worksheet.columns = [
+    { width: 15 }, // کد مشتری
+    { width: 30 }, // نام مشتری
+    { width: 15 }, // تلفن
+    { width: 25 }, // ایمیل
+    { width: 50 }, // آدرس
+    { width: 15 }, // تاریخ ایجاد
+  ];
+
+  // Generate and download
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = globalThis.document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.URL.revokeObjectURL(url);
+};
+
+// Export documents list to Excel
+interface DocumentForExport {
+  id: string;
+  type: string;
+  approvalStatus: string;
+  approvalOrder: number | null;
+  customerName: string;
+  totalAmount: string;
+  createdAt: Date;
+}
+
+const APPROVAL_STATUS: Record<string, string> = {
+  PENDING: 'در انتظار',
+  APPROVED: 'تایید شده',
+  REJECTED: 'رد شده',
+};
+
+export const exportDocumentsToExcel = async (
+  documents: DocumentForExport[],
+  filename: string = 'documents.xlsx'
+) => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('اسناد', {
+    views: [{ rightToLeft: true }],
+  });
+
+  // Add header
+  const headerRow = worksheet.addRow([
+    'شماره سند',
+    'نوع سند',
+    'نام مشتری',
+    'مبلغ کل (ریال)',
+    'وضعیت تایید',
+    'تاریخ ایجاد',
+  ]);
+
+  // Style header
+  headerRow.font = { bold: true, size: 11 };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF3B82F6' },
+  };
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'thin' },
+      right: { style: 'thin' },
+    };
+  });
+
+  // Add data rows
+  documents.forEach((doc) => {
+    const row = worksheet.addRow([
+      doc.approvalOrder || '-',
+      DOC_TYPES[doc.type] || doc.type,
+      doc.customerName,
+      doc.totalAmount,
+      APPROVAL_STATUS[doc.approvalStatus] || doc.approvalStatus,
+      new Date(doc.createdAt).toLocaleDateString('fa-IR'),
+    ]);
+
+    row.eachCell((cell, colNumber) => {
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' },
+      };
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+      // Color code for approval status
+      if (colNumber === 5) {
+        if (doc.approvalStatus === 'APPROVED') {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFD1FAE5' },
+          };
+        } else if (doc.approvalStatus === 'REJECTED') {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFEE2E2' },
+          };
+        } else if (doc.approvalStatus === 'PENDING') {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFEF3C7' },
+          };
+        }
+      }
+    });
+  });
+
+  // Set column widths
+  worksheet.columns = [
+    { width: 15 }, // شماره سند
+    { width: 20 }, // نوع سند
+    { width: 30 }, // نام مشتری
+    { width: 20 }, // مبلغ کل
+    { width: 15 }, // وضعیت تایید
+    { width: 15 }, // تاریخ ایجاد
+  ];
+
+  // Generate and download
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = globalThis.document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.URL.revokeObjectURL(url);
+};

@@ -8,6 +8,8 @@ import { trpc } from '@/lib/trpc';
 import { useToast } from '@/components/ui/toast-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Pagination } from '@/components/ui/pagination';
+import { exportCustomersToExcel } from '@/lib/services/excel-export';
+import { Download } from 'lucide-react';
 
 export default function CustomersPage() {
   const { data: session, status } = useSession();
@@ -31,6 +33,15 @@ export default function CustomersPage() {
     page,
     limit: 10,
     search: search || undefined,
+  });
+
+  // Debug log
+  console.log('🔍 Customers Page Debug:', {
+    customers,
+    isLoading,
+    hasData: !!customers,
+    dataArray: customers?.data,
+    dataLength: customers?.data?.length,
   });
 
   const createMutation = trpc.customer.create.useMutation({
@@ -115,15 +126,30 @@ export default function CustomersPage() {
               </Link>
               <h1 className="text-3xl font-bold text-gray-900">مشتریان</h1>
             </div>
-            <button
-              onClick={() => {
-                setEditingCustomer(null);
-                setIsModalOpen(true);
-              }}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-            >
-              + افزودن مشتری
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  if (customers?.data) {
+                    exportCustomersToExcel(customers.data, 'customers.xlsx');
+                    toast.success('فایل Excel با موفقیت دانلود شد');
+                  }
+                }}
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                disabled={!customers?.data?.length}
+              >
+                <Download className="h-4 w-4" />
+                دانلود Excel
+              </button>
+              <button
+                onClick={() => {
+                  setEditingCustomer(null);
+                  setIsModalOpen(true);
+                }}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+              >
+                + افزودن مشتری
+              </button>
+            </div>
           </div>
         </div>
       </header>

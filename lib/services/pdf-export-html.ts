@@ -54,15 +54,15 @@ const formatDate = (date: string | Date): string => {
   return new Date(date).toLocaleDateString('fa-IR');
 };
 
-export const generateDocumentPDFFromHTML = async (document: Document) => {
-  const showInternal = document.documentType === 'TEMP_PROFORMA';
+export const generateDocumentPDFFromHTML = async (doc: Document) => {
+  const showInternal = doc.documentType === 'TEMP_PROFORMA';
 
   // Calculate totals
-  const totalPurchase = document.items.reduce(
+  const totalPurchase = doc.items.reduce(
     (sum, item) => sum + item.purchasePrice * item.quantity,
     0
   );
-  const totalProfit = document.items.reduce(
+  const totalProfit = doc.items.reduce(
     (sum, item) => sum + (item.sellPrice - item.purchasePrice) * item.quantity,
     0
   );
@@ -84,16 +84,16 @@ export const generateDocumentPDFFromHTML = async (document: Document) => {
     <div style="max-width: 170mm;">
       <!-- Header -->
       <div style="margin-bottom: 20px; text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 15px;">
-        <h1 style="font-size: 28px; color: #2563eb; margin: 0 0 10px 0;">${DOC_TYPES[document.documentType]}</h1>
-        <p style="font-size: 16px; margin: 0;">شماره سند: <strong>${document.documentNumber}</strong></p>
+        <h1 style="font-size: 28px; color: #2563eb; margin: 0 0 10px 0;">${DOC_TYPES[doc.documentType]}</h1>
+        <p style="font-size: 16px; margin: 0;">شماره سند: <strong>${doc.documentNumber}</strong></p>
       </div>
 
       <!-- Document Info -->
       <div style="margin-bottom: 20px; background-color: #f3f4f6; padding: 15px; border-radius: 8px;">
         <h3 style="font-size: 18px; margin: 0 0 10px 0;">اطلاعات سند</h3>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div><strong>تاریخ سند:</strong> ${formatDate(document.issueDate)}</div>
-          <div><strong>تاریخ ایجاد:</strong> ${formatDate(document.issueDate)}</div>
+          <div><strong>تاریخ سند:</strong> ${formatDate(doc.issueDate)}</div>
+          <div><strong>تاریخ ایجاد:</strong> ${formatDate(doc.issueDate)}</div>
         </div>
       </div>
 
@@ -101,12 +101,12 @@ export const generateDocumentPDFFromHTML = async (document: Document) => {
       <div style="margin-bottom: 20px; background-color: #dbeafe; padding: 15px; border-radius: 8px;">
         <h3 style="font-size: 18px; margin: 0 0 10px 0;">اطلاعات مشتری</h3>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div><strong>نام:</strong> ${document.customer.name}</div>
-          <div><strong>کد:</strong> ${document.customer.code}</div>
-          <div><strong>تلفن:</strong> ${document.customer.phone}</div>
-          ${document.customer.company ? `<div><strong>شرکت:</strong> ${document.customer.company}</div>` : ''}
+          <div><strong>نام:</strong> ${doc.customer.name}</div>
+          <div><strong>کد:</strong> ${doc.customer.code}</div>
+          <div><strong>تلفن:</strong> ${doc.customer.phone}</div>
+          ${doc.customer.company ? `<div><strong>شرکت:</strong> ${doc.customer.company}</div>` : ''}
         </div>
-        ${document.customer.address ? `<div style="margin-top: 10px;"><strong>آدرس:</strong> ${document.customer.address}</div>` : ''}
+        ${doc.customer.address ? `<div style="margin-top: 10px;"><strong>آدرس:</strong> ${doc.customer.address}</div>` : ''}
       </div>
 
       <!-- Items Table -->
@@ -127,7 +127,7 @@ export const generateDocumentPDFFromHTML = async (document: Document) => {
             </tr>
           </thead>
           <tbody>
-            ${document.items
+            ${doc.items
               .map((item, index) => {
                 const profit = (item.sellPrice - item.purchasePrice) * item.quantity;
                 const profitPercent =
@@ -176,30 +176,30 @@ export const generateDocumentPDFFromHTML = async (document: Document) => {
         }
         <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #93c5fd;">
           <span><strong>جمع کل:</strong></span>
-          <span><strong>${formatCurrency(document.totalAmount)}</strong></span>
+          <span><strong>${formatCurrency(doc.totalAmount)}</strong></span>
         </div>
         ${
-          document.discountAmount > 0
+          doc.discountAmount > 0
             ? `
           <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #93c5fd; color: #dc2626;">
             <span><strong>تخفیف:</strong></span>
-            <span><strong>${formatCurrency(document.discountAmount)}</strong></span>
+            <span><strong>${formatCurrency(doc.discountAmount)}</strong></span>
           </div>
         `
             : ''
         }
         <div style="display: flex; justify-content: space-between; padding: 12px 0; font-size: 18px; color: #2563eb; border-top: 2px solid #2563eb; margin-top: 8px;">
           <span><strong>مبلغ قابل پرداخت:</strong></span>
-          <span><strong>${formatCurrency(document.finalAmount)}</strong></span>
+          <span><strong>${formatCurrency(doc.finalAmount)}</strong></span>
         </div>
       </div>
 
       ${
-        document.notes
+        doc.notes
           ? `
         <div style="margin-bottom: 20px; background-color: #fef3c7; padding: 15px; border-radius: 8px;">
           <h3 style="font-size: 18px; margin: 0 0 10px 0;">یادداشت‌ها</h3>
-          <p style="white-space: pre-wrap; margin: 0;">${document.notes}</p>
+          <p style="white-space: pre-wrap; margin: 0;">${doc.notes}</p>
         </div>
       `
           : ''
@@ -242,7 +242,7 @@ export const generateDocumentPDFFromHTML = async (document: Document) => {
       heightLeft -= pageHeight;
     }
 
-    pdf.save(`${document.documentNumber}.pdf`);
+    pdf.save(`${doc.documentNumber}.pdf`);
   } finally {
     // Clean up
     globalThis.document.body.removeChild(container);
