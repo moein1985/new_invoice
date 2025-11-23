@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -30,6 +31,25 @@ export default function DashboardPage() {
   // Fetch dashboard stats
   const { data: stats, isLoading: statsLoading } = trpc.stats.getDashboardStats.useQuery();
 
+  // عنوان چرخان در tab مرورگر
+  useEffect(() => {
+    if (!session?.user?.name) return;
+    
+    const title1 = 'سیستم مدیریت فاکتور';
+    const title2 = `${session.user.name}`;
+    let isFirst = true;
+    
+    const interval = setInterval(() => {
+      document.title = isFirst ? title1 : title2;
+      isFirst = !isFirst;
+    }, 3000); // هر 3 ثانیه تغییر کند
+    
+    return () => {
+      clearInterval(interval);
+      document.title = 'سیستم مدیریت فاکتور';
+    };
+  }, [session]);
+
   console.log('Dashboard - Status:', status, 'Session:', session);
 
   if (status === 'loading') {
@@ -53,7 +73,7 @@ export default function DashboardPage() {
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">
-              داشبورد
+              داشبورد - خوش آمدید {session.user.name}
             </h1>
             <div className="flex items-center gap-4">
               <GlobalSearch />

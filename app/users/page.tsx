@@ -95,6 +95,23 @@ export default function UsersPage() {
     };
 
     if (editingUser) {
+      // بررسی: اگر کاربر admin است و قصد تغییر پسورد دارد
+      if (editingUser.username === 'admin' && data.password) {
+        // بررسی کنیم که آیا مدیر دیگری وجود دارد
+        const otherAdmins = users?.data?.filter(
+          (u: any) => u.role === 'ADMIN' && u.id !== editingUser.id
+        );
+        
+        if (!otherAdmins || otherAdmins.length === 0) {
+          setToast({ 
+            message: 'برای تغییر رمز عبور admin حتماً باید یک مدیر دیگر وجود داشته باشد', 
+            type: 'error' 
+          });
+          setTimeout(() => setToast(null), 5000);
+          return;
+        }
+      }
+      
       updateMutation.mutate({
         id: editingUser.id,
         ...data,
@@ -105,11 +122,27 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = (id: string, fullName: string) => {
+  const handleDelete = (id: string, fullName: string, username: string) => {
     if (id === session.user.id) {
       setToast({ message: 'نمی‌توانید خودتان را حذف کنید', type: 'error' });
       setTimeout(() => setToast(null), 5000);
       return;
+    }
+    
+    // بررسی حذف admin
+    if (username === 'admin') {
+      const otherAdmins = users?.data?.filter(
+        (u: any) => u.role === 'ADMIN' && u.id !== id
+      );
+      
+      if (!otherAdmins || otherAdmins.length === 0) {
+        setToast({ 
+          message: 'برای حذف admin حتماً باید یک مدیر دیگر وجود داشته باشد', 
+          type: 'error' 
+        });
+        setTimeout(() => setToast(null), 5000);
+        return;
+      }
     }
     
     if (confirm(`آیا از حذف کاربر "${fullName}" اطمینان دارید؟`)) {
@@ -216,7 +249,7 @@ export default function UsersPage() {
                         ویرایش
                       </button>
                       <button
-                        onClick={() => handleDelete(user.id, user.fullName)}
+                        onClick={() => handleDelete(user.id, user.fullName, user.username)}
                         className="text-red-600 hover:text-red-900"
                         disabled={user.id === session.user.id}
                       >

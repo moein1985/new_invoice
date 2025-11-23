@@ -94,6 +94,15 @@ export default function ApprovalsPage() {
     return null;
   }
 
+  // فقط ADMIN و MANAGER به کارتابل تاییدیه‌ها دسترسی دارند
+  if (session.user.role !== 'ADMIN' && session.user.role !== 'MANAGER') {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-xl text-red-600">شما دسترسی به این صفحه ندارید</div>
+      </div>
+    );
+  }
+
   const handleApprove = (id: string, documentNumber: string) => {
     if (confirm(`آیا از تایید سند "${documentNumber}" اطمینان دارید؟`)) {
       approveMutation.mutate({ id });
