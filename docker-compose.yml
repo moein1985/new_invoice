@@ -5,7 +5,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: invoice_postgres
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_DB: invoice_db
       POSTGRES_USER: invoice_user
@@ -27,7 +27,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: invoice_web
-    restart: unless-stopped
+    restart: always
     ports:
       - "3000:3000"
     environment:
