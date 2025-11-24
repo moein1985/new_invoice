@@ -34,9 +34,6 @@ COPY --from=deps /app/prisma ./prisma
 # Copy source code
 COPY . .
 
-# Prisma is already generated in deps stage, just verify
-RUN npx prisma --version
-
 # Build Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
