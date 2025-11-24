@@ -8,6 +8,10 @@ import { trpc } from '@/lib/trpc';
 import { useToast } from '@/components/ui/toast-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Download, Upload, AlertTriangle, Database } from 'lucide-react';
+import CryptoJS from 'crypto-js';
+
+// پسورد ثابت برای رمزنگاری/رمزگشایی
+const BACKUP_PASSWORD = 'admin123';
 
 export default function BackupPage() {
   const { data: session, status } = useSession();
@@ -19,20 +23,24 @@ export default function BackupPage() {
 
   const exportMutation = trpc.backup.exportDatabase.useMutation({
     onSuccess: (data: any) => {
-      // Download the backup file
-      const blob = new Blob([JSON.stringify(data.backup, null, 2)], {
-        type: 'application/json',
+      // رمزنگاری JSON با پسورد ثابت
+      const jsonString = JSON.stringify(data.backup, null, 2);
+      const encrypted = CryptoJS.AES.encrypt(jsonString, BACKUP_PASSWORD).toString();
+      
+      // Download the encrypted backup file
+      const blob = new Blob([encrypted], {
+        type: 'application/octet-stream',
       });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = data.filename;
+      link.download = data.filename.replace('.json', '.enc');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast.success('بکاپ با موفقیت ایجاد و دانلود شد');
+      toast.success('بکاپ رمزنگاری شده با موفقیت ایجاد و دانلود شد');
     },
     onError: (error: any) => {
       toast.error('خطا در ایجاد بکاپ', error.message);
@@ -75,10 +83,7 @@ export default function BackupPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type !== 'application/json') {
-        toast.error('فقط فایل‌های JSON مجاز هستند');
-        return;
-      }
+      // قبول فایل‌های .enc (رمزنگاری شده) و .json
       setSelectedFile(file);
     }
   };
@@ -101,7 +106,26 @@ export default function BackupPage() {
 
     try {
       const text = await selectedFile.text();
-      const backup = JSON.parse(text);
+      
+      // تلاش برای رمزگشایی
+      let backup;
+      try {
+        const decrypted = CryptoJS.AES.decrypt(text, BACKUP_PASSWORD);
+        const decryptedText = decrypted.toString(CryptoJS.enc.Utf8);
+        
+        if (!decryptedText) {
+          throw new Error('رمزگشایی ناموفق - فایل معتبر نیست');
+        }
+        
+        backup = JSON.parse(decryptedText);
+      } catch (decryptError) {
+        // اگر رمزگشایی ناموفق بود، شاید فایل رمزنگاری نشده باشه
+        try {
+          backup = JSON.parse(text);
+        } catch {
+          throw new Error('فایل بکاپ معتبر نیست یا رمز اشتباه است');
+        }
+      }
 
       if (!backup.data) {
         throw new Error('فرمت فایل بکاپ نامعتبر است');
@@ -193,7 +217,7 @@ export default function BackupPage() {
               </label>
               <input
                 type="file"
-                accept=".json"
+                accept=".enc,.json"
                 onChange={handleFileSelect}
                 className="block w-full text-sm text-gray-500
                   file:mr-4 file:py-2 file:px-4
