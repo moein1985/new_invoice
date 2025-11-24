@@ -16,8 +16,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+# Install OpenSSL and other dependencies for Prisma
+RUN apk add --no-cache openssl ca-certificates
 
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
@@ -25,8 +25,11 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy source code
 COPY . .
 
-# Generate Prisma Client
-RUN npx prisma generate
+# Set environment for Prisma
+ENV PRISMA_ENGINES_MIRROR=https://prisma-engines.s3-eu-west-1.amazonaws.com
+
+# Generate Prisma Client with retry
+RUN npx prisma generate || npx prisma generate || npx prisma generate
 
 # Build Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
