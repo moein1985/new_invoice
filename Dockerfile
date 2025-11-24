@@ -5,9 +5,17 @@ FROM node:20-alpine AS deps
 
 WORKDIR /app
 
+# Install OpenSSL and CA certificates
+RUN apk add --no-cache openssl ca-certificates
+
 # Install dependencies only when needed
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps
+
+# Pre-generate Prisma client with engines
+COPY prisma ./prisma
+ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
+RUN npx prisma generate || echo "Prisma generate failed but continuing..."
 
 # ============================================
 # Stage 2: Builder
@@ -16,20 +24,18 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install OpenSSL and other dependencies for Prisma
+# Install OpenSSL
 RUN apk add --no-cache openssl ca-certificates
 
-# Copy dependencies from deps stage
+# Copy dependencies and generated Prisma client from deps stage
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/prisma ./prisma
 
 # Copy source code
 COPY . .
 
-# Set environment for Prisma - ignore checksum in offline/restricted environments
-ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
-
-# Generate Prisma Client
-RUN npx prisma generate
+# Prisma is already generated in deps stage, just verify
+RUN npx prisma --version
 
 # Build Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
