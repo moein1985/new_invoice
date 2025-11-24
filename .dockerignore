@@ -1,0 +1,68 @@
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+.next
+out
+dist
+build
+
+# Environment
+.env
+.env*.local
+
+# Testing
+coverage
+.nyc_output
+.playwright
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Logs
+logs
+*.log
+
+# Misc
+*.tsbuildinfo
+.swc
+
+# Prisma
+prisma/migrations/.migration_lock
+
+# Documentation (keep README)
+CHANGELOG.md
+IMPROVEMENTS.md
+NEW_FEATURES_v3.md
+PROJECT_SUMMARY.md
+SENTRY_SETUP.md
+USAGE_GUIDE.md
+
+# Test files
+__tests__
+e2e
+tests
+jest.config.js
+jest.setup.js
+playwright.config.ts
+
+# Scripts (except seed)
+scripts
+
+# Sentry config (included in build)
+# Keep these for runtime

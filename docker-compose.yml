@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: invoice_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: invoice_db
+      POSTGRES_USER: invoice_user
+      POSTGRES_PASSWORD: invoice_pass_2024
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - invoice_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invoice_user -d invoice_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Next.js Application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: invoice_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://invoice_user:invoice_pass_2024@postgres:5432/invoice_db?schema=public
+      - NEXTAUTH_SECRET=change-this-to-random-secret-in-production-min-32-chars
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXT_PUBLIC_SENTRY_DSN=https://3c5ad66f6f4b86e0108612be946c7868@o4509871721086976.ingest.de.sentry.io/4510413651968080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - invoice_network
+    volumes:
+      - ./backups:/app/backups
+
+networks:
+  invoice_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
