@@ -11,10 +11,11 @@ until node -e "const { Client } = require('pg'); const client = new Client({ con
 done
 
 echo "📦 Running database migrations..."
-npx prisma migrate deploy
+# Use the local prisma version from node_modules, not npx which might download a newer version
+node ./node_modules/.bin/prisma migrate deploy
 
 echo "🌱 Seeding database..."
-npx prisma db seed || echo "⚠️  Seed already exists or failed, continuing..."
+node ./node_modules/.bin/prisma db seed || echo "⚠️  Seed already exists or failed, continuing..."
 
 echo "✅ Starting Next.js application..."
 exec node server.js
