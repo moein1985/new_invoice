@@ -60,6 +60,9 @@ COPY --from=builder /app/prisma ./prisma
 # Copy entire node_modules to ensure all Prisma dependencies are available
 COPY --from=builder /app/node_modules ./node_modules
 
+# Verify Prisma Client is properly generated
+RUN ls -la /app/node_modules/.prisma/client/ || echo "Prisma client not found"
+
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
