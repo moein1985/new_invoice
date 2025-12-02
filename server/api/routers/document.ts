@@ -138,14 +138,25 @@ export const documentRouter = createTRPCRouter({
       }[input.documentType];
 
       const year = new Date().getFullYear();
-      const count = await ctx.prisma.document.count({
+      
+      // Get the last document number to avoid duplicates
+      const lastDocument = await ctx.prisma.document.findFirst({
         where: {
-          documentType: input.documentType,
           documentNumber: { startsWith: `${prefix}-${year}` },
         },
+        orderBy: { documentNumber: 'desc' },
+        select: { documentNumber: true },
       });
 
-      const documentNumber = `${prefix}-${year}-${String(count + 1).padStart(6, '0')}`;
+      let nextNumber = 1;
+      if (lastDocument?.documentNumber) {
+        const lastNumberStr = lastDocument.documentNumber.split('-').pop();
+        if (lastNumberStr) {
+          nextNumber = parseInt(lastNumberStr, 10) + 1;
+        }
+      }
+
+      const documentNumber = `${prefix}-${year}-${String(nextNumber).padStart(6, '0')}`;
 
       // Calculate totals
       const totalAmount = items.reduce((sum, item) => sum + item.sellPrice * item.quantity, 0);
@@ -413,14 +424,25 @@ export const documentRouter = createTRPCRouter({
       }[input.toType];
 
       const year = new Date().getFullYear();
-      const count = await ctx.prisma.document.count({
+      
+      // Get the last document number to avoid duplicates
+      const lastDocument = await ctx.prisma.document.findFirst({
         where: {
-          documentType: input.toType,
           documentNumber: { startsWith: `${prefix}-${year}` },
         },
+        orderBy: { documentNumber: 'desc' },
+        select: { documentNumber: true },
       });
 
-      const documentNumber = `${prefix}-${year}-${String(count + 1).padStart(6, '0')}`;
+      let nextNumber = 1;
+      if (lastDocument?.documentNumber) {
+        const lastNumberStr = lastDocument.documentNumber.split('-').pop();
+        if (lastNumberStr) {
+          nextNumber = parseInt(lastNumberStr, 10) + 1;
+        }
+      }
+
+      const documentNumber = `${prefix}-${year}-${String(nextNumber).padStart(6, '0')}`;
 
       // تعیین وضعیت تایید: فقط TEMP_PROFORMA نیاز به تایید دارد
       // بقیه اسناد (PROFORMA, INVOICE, ...) خودکار APPROVED هستند
