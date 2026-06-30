@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -8,7 +8,11 @@ import { trpc } from '@/lib/trpc';
 import moment from 'moment-jalaali';
 import { exportDocumentsToExcel } from '@/lib/services/excel-export';
 import { useToast } from '@/components/ui/toast-provider';
-import { Download } from 'lucide-react';
+import { Download, Search, Clock } from 'lucide-react';
+import { Pagination } from '@/components/ui/pagination';
+import { PageSkeleton, TableSkeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { JalaliDatePicker } from '@/components/ui/jalali-date-picker';
 
 const DOC_TYPES = {
   TEMP_PROFORMA: 'پیش فاکتور موقت',
@@ -34,17 +38,79 @@ export default function DocumentsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const toast = useToast();
-  const [selectedType, setSelectedType] = useState<DocumentType | ''>('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typeFilters, setTypeFilters] = useState<Set<DocumentType>>(new Set());
   const [deepSearch, setDeepSearch] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; docNumber: string } | null>(null);
+  const [editWarningDoc, setEditWarningDoc] = useState<{ id: string; documentNumber: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const qp = Number(params.get('page') || '1');
+    const ql = Number(params.get('limit') || '50');
+    const qs = params.get('search') || '';
+    const qd = params.get('deep') === '1';
+    const qt = params.get('types');
+    const qf = params.get('from') || '';
+    const qtDate = params.get('to') || '';
+
+    setPage(Number.isFinite(qp) && qp > 0 ? qp : 1);
+    setLimit([20, 50, 100].includes(ql) ? ql : 50);
+    setSearch(qs);
+    setDeepSearch(qd);
+    setTypeFilters(new Set((qt ? qt.split(',') : []).filter(Boolean) as DocumentType[]));
+    setDateFrom(qf);
+    setDateTo(qtDate);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    if (search.trim()) params.set('search', search.trim());
+    if (deepSearch) params.set('deep', '1');
+    if (typeFilters.size > 0) params.set('types', Array.from(typeFilters).join(','));
+    if (dateFrom) params.set('from', dateFrom);
+    if (dateTo) params.set('to', dateTo);
+    router.replace(`/documents?${params.toString()}`);
+  }, [page, limit, search, deepSearch, typeFilters, dateFrom, dateTo, router]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, deepSearch, typeFilters, limit, dateFrom, dateTo]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+
+    return () => clearTimeout(t);
+  }, [search]);
 
   // Fetch documents
   const { data: documents, isLoading, refetch } = trpc.document.list.useQuery({
-    page: 1,
-    limit: 50,
-    documentType: selectedType ? (selectedType as DocumentType) : undefined,
+    page,
+    limit,
+    types: typeFilters.size > 0 ? Array.from(typeFilters) : undefined,
+    search: debouncedSearch.trim() || undefined,
+    deepSearch,
+    dateFrom: dateFrom ? new Date(dateFrom) : undefined,
+    dateTo: dateTo ? new Date(`${dateTo}T23:59:59.999`) : undefined,
   });
+
+  const exportAllMutation = trpc.document.exportFiltered.useMutation();
+
+  useEffect(() => {
+    if (documents?.meta.totalPages && page > documents.meta.totalPages) {
+      setPage(documents.meta.totalPages);
+    }
+  }, [documents, page]);
 
   const deleteMutation = trpc.document.delete.useMutation({
     onSuccess: () => {
@@ -53,11 +119,7 @@ export default function DocumentsPage() {
   });
 
   if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">در حال بارگذاری...</div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!session) {
@@ -66,9 +128,7 @@ export default function DocumentsPage() {
   }
 
   const handleDelete = (id: string, docNumber: string) => {
-    if (confirm(`آیا از حذف سند "${docNumber}" اطمینان دارید؟`)) {
-      deleteMutation.mutate({ id });
-    }
+    setDeleteTarget({ id, docNumber });
   };
 
   const handleEditClick = (doc: any) => {
@@ -78,16 +138,7 @@ export default function DocumentsPage() {
       const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjGJ0fPTgjMGHm7A7+OZRQ0PVa3n77BdGAg+lt35xXIqBSh+zPLaizsIGGS56+adTRAMTqfi8LdjHAU2jdXzzn0vBSd8yPDekUEJE1yx6OyrWBUIQ5zd8sFuIwUwhM/z1YU2Bhxqvu7mnEgND1Kt5++vXRYIPZTV+shyKwUogM/y2oo8ByFluezmm0kNDU+r5O+wXRYHPJLU+spzKwUngM7y2Yk7BxhluezmmlUNDUyp5O+xXhYHOpHT+sl0KwUngM3y2Ik6BxhmvOzmnVENDUyr5O+vXhUIOpHU+sl0KwUmgM3y2Yk6BxhmvOzmnFANDEyq5O+wXRUIOpHU+sl0KwUmgM3y2Yk6BxhmvOzmnFANDEyq5O+wXRUIOpHU+sl0KwUmgM3y2Yk6BxhmvOzmnFANDEyq5O+wXRUIOpHU+sl0KwUmgM3y2Yk6BxhmvOzmnFANDEyq5O+wXRUIOpHU+sl0KwUmgM3y2Yk6BxhmvOzmnFANDEyq5O+wXRUIOpHU+sl0KwUmgM3y2Yk6BxhmvOzmnFANDEyq5O+wXRUIOpHU+sl0KwUmgM3y2Yk6BxhmvOzmnFANDEyq5O+wXRUIOpHU+sl0KwUmgM3y2Yk6BxhmvOzmnFANDEyq5O+wXRUIOpHU+sl0KwUmgM3y2Yk6BxhmvOzmnFANDEyq5O+wXRUIOpHU+sl0KwUmgM3y2Yk6Bxhm');
       audio.play().catch(() => {});
 
-      const confirmed = confirm(
-        `⚠️ هشدار مهم!\n\n` +
-        `این پیش‌فاکتور موقت قبلاً توسط مدیر تایید شده است.\n\n` +
-        `با ویرایش این سند، تمام اسناد مرتبط (پیش‌فاکتور و فاکتور) که از روی آن ساخته شده‌اند حذف خواهند شد!\n\n` +
-        `آیا از ادامه اطمینان دارید؟`
-      );
-      
-      if (confirmed) {
-        router.push(`/documents/edit/${doc.id}`);
-      }
+      setEditWarningDoc({ id: doc.id, documentNumber: doc.documentNumber });
     } else {
       // برای بقیه اسناد مستقیم برو به صفحه ویرایش
       router.push(`/documents/edit/${doc.id}`);
@@ -120,39 +171,57 @@ export default function DocumentsPage() {
     });
   };
 
-  const filteredDocuments = documents?.data.filter((doc: any) => {
-    if (typeFilters.size > 0 && !typeFilters.has(doc.documentType)) return false;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      
-      // جستجوی پایه در شماره سند و نام مشتری
-      const basicMatch = 
-        doc.documentNumber?.toLowerCase().includes(searchLower) ||
-        doc.customerName?.toLowerCase().includes(searchLower) ||
-        doc.projectName?.toLowerCase().includes(searchLower);
-      
-      if (!deepSearch) {
-        return basicMatch;
-      }
-      
-      // جستجوی عمیق در همه فیلدها
-      if (basicMatch) return true;
-      
-      // جستجو در یادداشت
-      if (doc.notes?.toLowerCase().includes(searchLower)) return true;
-      
-      // جستجو در اقلام سند
-      if (doc.items && Array.isArray(doc.items)) {
-        return doc.items.some((item: any) =>
-          item.productName?.toLowerCase().includes(searchLower) ||
-          item.description?.toLowerCase().includes(searchLower) ||
-          item.supplier?.toLowerCase().includes(searchLower) ||
-          item.unit?.toLowerCase().includes(searchLower)
-        );
-      }
+  const clearFilters = () => {
+    setSearch('');
+    setDeepSearch(false);
+    setTypeFilters(new Set());
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
+  };
+
+  const removeFilterChip = (type: 'search' | 'deepSearch' | 'dateFrom' | 'dateTo' | 'docType', value?: string) => {
+    if (type === 'search') setSearch('');
+    if (type === 'deepSearch') setDeepSearch(false);
+    if (type === 'dateFrom') setDateFrom('');
+    if (type === 'dateTo') setDateTo('');
+    if (type === 'docType' && value) {
+      setTypeFilters((prev) => {
+        const next = new Set(prev);
+        next.delete(value as DocumentType);
+        return next;
+      });
     }
-    return true;
-  });
+  };
+
+  const visibleDocuments = documents?.data || [];
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === visibleDocuments.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleDocuments.map((d: any) => d.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    for (const id of selectedIds) {
+      await deleteMutation.mutateAsync({ id });
+    }
+    setSelectedIds(new Set());
+    refetch();
+    toast.success(`${count} سند با موفقیت حذف شد`);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl" style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}>
@@ -160,17 +229,12 @@ export default function DocumentsPage() {
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-3xl font-bold text-gray-900">اسناد</h1>
-              <Link href="/dashboard" className="text-gray-500 hover:text-gray-700">
-                بازگشت ←
-              </Link>
-            </div>
+            <h1 className="text-3xl font-bold text-gray-900">اسناد</h1>
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  if (filteredDocuments && filteredDocuments.length > 0) {
-                    const docsForExport = filteredDocuments.map((doc: any) => ({
+                  if (visibleDocuments.length > 0) {
+                    const docsForExport = visibleDocuments.map((doc: any) => ({
                       id: doc.id,
                       type: doc.documentType,
                       approvalStatus: doc.approvalStatus,
@@ -184,10 +248,48 @@ export default function DocumentsPage() {
                   }
                 }}
                 className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-                disabled={!filteredDocuments?.length}
+                disabled={!visibleDocuments.length}
               >
                 <Download className="h-4 w-4" />
-                دانلود Excel
+                خروجی صفحه جاری
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const result = await exportAllMutation.mutateAsync({
+                      types: typeFilters.size > 0 ? Array.from(typeFilters) : undefined,
+                      search: debouncedSearch.trim() || undefined,
+                      deepSearch,
+                      dateFrom: dateFrom ? new Date(dateFrom) : undefined,
+                      dateTo: dateTo ? new Date(`${dateTo}T23:59:59.999`) : undefined,
+                    });
+
+                    if (!result.data.length) {
+                      toast.warning('نتیجه‌ای برای خروجی یافت نشد');
+                      return;
+                    }
+
+                    const docsForExport = result.data.map((doc: any) => ({
+                      id: doc.id,
+                      type: doc.documentType,
+                      approvalStatus: doc.approvalStatus,
+                      approvalOrder: doc.approvalOrder,
+                      customerName: doc.customerName,
+                      totalAmount: doc.totalAmount,
+                      createdAt: doc.createdAt,
+                    }));
+
+                    exportDocumentsToExcel(docsForExport, 'documents-filtered.xlsx');
+                    toast.success('خروجی کل نتایج فیلترشده دانلود شد');
+                  } catch (error) {
+                    toast.error('خطا در دریافت خروجی', (error as Error).message);
+                  }
+                }}
+                className="flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-white hover:bg-emerald-800 disabled:opacity-60"
+                disabled={exportAllMutation.isPending}
+              >
+                <Download className="h-4 w-4" />
+                {exportAllMutation.isPending ? 'در حال آماده‌سازی...' : 'خروجی همه نتایج'}
               </button>
               <Link
                 href="/documents/new"
@@ -202,8 +304,91 @@ export default function DocumentsPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumb items={[{ label: 'اسناد' }]} />
         {/* Filters */}
         <div className="mb-6 space-y-4">
+          <div className="sticky top-3 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-gray-300 bg-white p-3 shadow-sm">
+            <label className="text-sm font-medium text-gray-800">تعداد در صفحه:</label>
+            <select
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <label className="text-sm font-medium text-gray-800">از تاریخ:</label>
+            <JalaliDatePicker
+              value={dateFrom}
+              onChange={(v) => setDateFrom(v)}
+              placeholder="از تاریخ"
+            />
+            <label className="text-sm font-medium text-gray-800">تا تاریخ:</label>
+            <JalaliDatePicker
+              value={dateTo}
+              onChange={(v) => setDateTo(v)}
+              placeholder="تا تاریخ"
+            />
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-md bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
+            >
+              پاک کردن فیلترها
+            </button>
+          </div>
+
+          {(search.trim() || deepSearch || typeFilters.size > 0 || dateFrom || dateTo) && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3">
+              {search.trim() && (
+                <button
+                  type="button"
+                  onClick={() => removeFilterChip('search')}
+                  className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800"
+                >
+                  جستجو: {search} ✕
+                </button>
+              )}
+              {deepSearch && (
+                <button
+                  type="button"
+                  onClick={() => removeFilterChip('deepSearch')}
+                  className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800"
+                >
+                  جستجوی دقیق ✕
+                </button>
+              )}
+              {dateFrom && (
+                <button
+                  type="button"
+                  onClick={() => removeFilterChip('dateFrom')}
+                  className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800"
+                >
+                  از: {dateFrom} ✕
+                </button>
+              )}
+              {dateTo && (
+                <button
+                  type="button"
+                  onClick={() => removeFilterChip('dateTo')}
+                  className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800"
+                >
+                  تا: {dateTo} ✕
+                </button>
+              )}
+              {Array.from(typeFilters).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => removeFilterChip('docType', type)}
+                  className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800"
+                >
+                  {DOC_TYPES[type]} ✕
+                </button>
+              ))}
+            </div>
+          )}
           {/* جستجو */}
           <div className="space-y-2">
             <input
@@ -222,7 +407,7 @@ export default function DocumentsPage() {
                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="text-sm font-medium text-gray-700" style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}>
-                🔍 جستجوی دقیق (در محصولات، تامین‌کنندگان، توضیحات و...)
+                <Search className="inline h-4 w-4" /> جستجوی دقیق (در محصولات، تامین‌کنندگان، توضیحات و...)
               </span>
             </label>
           </div>
@@ -277,15 +462,74 @@ export default function DocumentsPage() {
                   سایر
                 </span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={typeFilters.has('RETURN_INVOICE')}
+                  onChange={() => toggleTypeFilter('RETURN_INVOICE')}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-900" style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}>
+                  فاکتور برگشتی
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={typeFilters.has('RECEIPT')}
+                  onChange={() => toggleTypeFilter('RECEIPT')}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-900" style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}>
+                  رسید
+                </span>
+              </label>
             </div>
           </div>
         </div>
 
+        {/* Bulk Action Bar */}
+        {selectedIds.size > 0 && (
+          <div className="mb-4 flex items-center gap-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+            <span className="text-sm font-bold text-blue-800">
+              {selectedIds.size} سند انتخاب شده
+            </span>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={deleteMutation.isPending}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              حذف انتخاب‌شده‌ها
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (documents?.data) {
+                  const selectedDocs = documents.data.filter((d: any) => selectedIds.has(d.id));
+                  exportDocumentsToExcel(selectedDocs, 'selected-documents.xlsx');
+                  toast.success('فایل Excel انتخاب‌شده‌ها دانلود شد');
+                }
+              }}
+              className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
+            >
+              دانلود Excel انتخاب‌شده‌ها
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="mr-auto text-sm text-gray-600 hover:text-gray-800"
+            >
+              لغو انتخاب
+            </button>
+          </div>
+        )}
+
         {/* Documents Table */}
         <div className="overflow-hidden bg-white shadow sm:rounded-lg">
           {isLoading ? (
-            <div className="p-8 text-center">در حال بارگذاری...</div>
-          ) : !documents?.data.length ? (
+            <TableSkeleton columns={7} rows={10} />
+          ) : !visibleDocuments.length ? (
             <div className="p-8 text-center text-gray-500">
               هیچ سندی یافت نشد
             </div>
@@ -294,6 +538,14 @@ export default function DocumentsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-100">
                   <tr>
+                    <th className="w-10 px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={visibleDocuments.length > 0 && selectedIds.size === visibleDocuments.length}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
                     <th className="px-6 py-3 text-right text-sm font-bold text-gray-900" style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}>
                       شماره سند
                     </th>
@@ -318,8 +570,16 @@ export default function DocumentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {filteredDocuments?.map((doc: any) => (
-                    <tr key={doc.id} className="hover:bg-gray-50">
+                  {visibleDocuments.map((doc: any) => (
+                    <tr key={doc.id} className={`hover:bg-gray-50 ${selectedIds.has(doc.id) ? 'bg-blue-50' : ''}`}>
+                      <td className="w-10 px-3 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(doc.id)}
+                          onChange={() => toggleSelect(doc.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
                         {doc.documentNumber}
                       </td>
@@ -349,7 +609,7 @@ export default function DocumentsPage() {
                             </span>
                           ) : (
                             <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-800" style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}>
-                              در انتظار تایید ⏳
+                              در انتظار تایید <Clock className="inline h-3 w-3" />
                             </span>
                           )
                         ) : (
@@ -409,16 +669,100 @@ export default function DocumentsPage() {
           <div className="mt-4 text-sm font-medium text-gray-700" style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}>
             {typeFilters.size > 0 || search ? (
               <>
-                تعداد فیلتر شده: <span className="font-bold text-blue-600">{toPersianNumber(filteredDocuments?.length || 0)}</span> سند از مجموع <span className="font-bold">{toPersianNumber(documents.meta.total)}</span> سند
+                تعداد این صفحه: <span className="font-bold text-blue-600">{toPersianNumber(visibleDocuments.length)}</span> سند از مجموع <span className="font-bold">{toPersianNumber(documents.meta.total)}</span> سند
               </>
             ) : (
               <>
-                تعداد کل: <span className="font-bold">{toPersianNumber(documents.meta.total)}</span> سند
+                تعداد این صفحه: <span className="font-bold text-blue-600">{toPersianNumber(visibleDocuments.length)}</span> سند از مجموع <span className="font-bold">{toPersianNumber(documents.meta.total)}</span> سند
               </>
             )}
           </div>
         )}
+
+        {/* Pagination */}
+        {documents && documents.meta.totalPages > 1 && (
+          <div className="mt-4">
+            <Pagination
+              currentPage={page}
+              totalPages={documents.meta.totalPages}
+              totalItems={documents.meta.total}
+              itemsPerPage={documents.meta.limit}
+              onPageChange={(newPage) => setPage(newPage)}
+            />
+          </div>
+        )}
       </main>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900">حذف سند {deleteTarget.docNumber}</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-700">آیا از حذف این سند اطمینان دارید؟ این عملیات قابل بازگشت نیست.</p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteMutation.isPending}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteMutation.mutate(
+                    { id: deleteTarget.id },
+                    {
+                      onSuccess: () => {
+                        setDeleteTarget(null);
+                        toast.success('سند با موفقیت حذف شد');
+                      },
+                      onError: (error) => {
+                        toast.error('حذف سند ناموفق بود', error.message);
+                      },
+                    }
+                  );
+                }}
+                disabled={deleteMutation.isPending}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleteMutation.isPending ? 'در حال حذف...' : 'حذف سند'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editWarningDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900">ویرایش سند {editWarningDoc.documentNumber}</h3>
+            <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">
+              {'این پیش‌فاکتور موقت قبلا تایید شده است.\n\nدر صورت ویرایش، تمام اسناد مرتبط (پیش‌فاکتور و فاکتور) که از روی آن ساخته شده‌اند حذف خواهند شد.\n\nآیا ادامه می‌دهید؟'}
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditWarningDoc(null)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = editWarningDoc.id;
+                  setEditWarningDoc(null);
+                  router.push(`/documents/edit/${targetId}`);
+                }}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
+              >
+                بله، ادامه
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

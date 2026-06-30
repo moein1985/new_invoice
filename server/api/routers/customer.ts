@@ -166,4 +166,71 @@ export const customerRouter = createTRPCRouter({
         where: { id: input.id },
       });
     }),
+
+  // Find customer by phone number (for SIP/CTI caller ID)
+  findByPhone: protectedProcedure
+    .input(z.object({ phone: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      // Normalize phone: remove +98, leading 0, spaces, dashes
+      const normalized = input.phone
+        .replace(/[\s\-()]/g, '')
+        .replace(/^\+98/, '')
+        .replace(/^0/, '');
+
+      if (normalized.length < 5) return null;
+
+      // Search with multiple formats
+      const searchPatterns = [
+        normalized,
+        `0${normalized}`,
+        `+98${normalized}`,
+        `۰${normalized}`,
+      ];
+
+      const customer = await ctx.prisma.customer.findFirst({
+        where: {
+          OR: searchPatterns.map((p) => ({
+            phone: { contains: p },
+          })),
+        },
+        include: {
+          documents: {
+            take: 5,
+            orderBy: [
+              { approvalStatus: 'asc' },
+              { createdAt: 'desc' },
+            ],
+            include: {
+              items: {
+                select: {
+                  productName: true,
+                  sellPrice: true,
+                  quantity: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!customer) return null;
+
+      // Calculate financial summary
+      const invoices = customer.documents.filter(
+        (d) => d.documentType === 'INVOICE' || d.documentType === 'PROFORMA' || d.documentType === 'TEMP_PROFORMA'
+      );
+      const receipts = customer.documents.filter((d) => d.documentType === 'RECEIPT');
+
+      const totalInvoices = invoices.reduce((sum, d) => sum + d.finalAmount, 0);
+      const totalReceipts = receipts.reduce((sum, d) => sum + d.finalAmount, 0);
+
+      return {
+        ...customer,
+        financialSummary: {
+          totalInvoices,
+          totalReceipts,
+          balance: totalInvoices - totalReceipts,
+        },
+      };
+    }),
 });

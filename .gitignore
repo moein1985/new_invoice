@@ -46,3 +46,6 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
+
+# SWC tarballs for Docker build (keep locally, don't commit)
+swc-linux-*.tgz

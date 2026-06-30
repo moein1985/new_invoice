@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { PageSkeleton, TableSkeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 export default function UsersPage() {
   const { data: session, status } = useSession();
@@ -14,6 +17,7 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; fullName: string } | null>(null);
 
   const { data: users, isLoading, refetch } = trpc.user.list.useQuery(
     {},
@@ -61,11 +65,7 @@ export default function UsersPage() {
   });
 
   if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">در حال بارگذاری...</div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!session) {
@@ -145,9 +145,7 @@ export default function UsersPage() {
       }
     }
     
-    if (confirm(`آیا از حذف کاربر "${fullName}" اطمینان دارید؟`)) {
-      deleteMutation.mutate({ id });
-    }
+    setDeleteTarget({ id, fullName });
   };
 
   return (
@@ -156,12 +154,7 @@ export default function UsersPage() {
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-gray-500 hover:text-gray-700">
-                ← بازگشت
-              </Link>
-              <h1 className="text-3xl font-bold text-gray-900">مدیریت کاربران</h1>
-            </div>
+            <h1 className="text-3xl font-bold text-gray-900">مدیریت کاربران</h1>
             <button
               onClick={() => {
                 setEditingUser(null);
@@ -177,8 +170,9 @@ export default function UsersPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <Breadcrumb items={[{ label: 'کاربران' }]} />
         {isLoading ? (
-          <div className="text-center">در حال بارگذاری...</div>
+          <TableSkeleton columns={6} rows={5} />
         ) : (
           <div className="overflow-hidden rounded-lg bg-white shadow">
             <table className="min-w-full divide-y divide-gray-200">
@@ -225,11 +219,14 @@ export default function UsersPage() {
                           ? 'bg-red-100 text-red-800'
                           : user.role === 'MANAGER'
                           ? 'bg-blue-100 text-blue-800'
+                          : user.role === 'CONTRACTOR'
+                          ? 'bg-orange-100 text-orange-800'
                           : 'bg-green-100 text-green-800'
                       }`}>
                         {user.role === 'ADMIN' && 'مدیر'}
                         {user.role === 'MANAGER' && 'مدیر میانی'}
                         {user.role === 'USER' && 'کاربر'}
+                        {user.role === 'CONTRACTOR' && 'پیمانکار'}
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
@@ -361,6 +358,7 @@ export default function UsersPage() {
                     <option value="USER">کاربر</option>
                     <option value="MANAGER">مدیر میانی</option>
                     <option value="ADMIN">مدیر</option>
+                    <option value="CONTRACTOR">پیمانکار</option>
                   </select>
                 </div>
                 <div className="flex gap-3">
@@ -402,6 +400,22 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMutation.mutate({ id: deleteTarget.id });
+            setDeleteTarget(null);
+          }
+        }}
+        title={`حذف کاربر ${deleteTarget?.fullName ?? ''}`}
+        message="آیا از حذف این کاربر اطمینان دارید؟ این عملیات قابل بازگشت نیست."
+        confirmText="حذف کاربر"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

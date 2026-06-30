@@ -51,7 +51,7 @@ export const createUserSchema = z.object({
   fullName: z.string()
     .min(1, 'نام کامل الزامی است')
     .max(255, 'نام کامل بیش از حد طولانی است'),
-  role: z.enum(['ADMIN', 'MANAGER', 'USER']).default('USER'),
+  role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR']).default('USER'),
   isActive: z.boolean().default(true),
 });
 
@@ -61,7 +61,7 @@ export const updateUserSchema = z.object({
     .min(1, 'نام کامل الزامی است')
     .max(255, 'نام کامل بیش از حد طولانی است')
     .optional(),
-  role: z.enum(['ADMIN', 'MANAGER', 'USER']).optional(),
+  role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR']).optional(),
   isActive: z.boolean().optional(),
   password: z.string()
     .min(6, 'رمز عبور باید حداقل 6 کاراکتر باشد')

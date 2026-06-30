@@ -1,0 +1,79 @@
+# ============================================
+# Zero-network deploy: reuses existing image
+# Chromium installed from IUT mirror (Iranian)
+# ============================================
+
+# ---- Builder: compile updated source ----
+FROM new_invoice-web:latest AS builder
+
+USER root
+WORKDIR /build
+
+# Bring node_modules from the running image
+RUN cp -a /app/node_modules /build/node_modules
+
+# Copy prisma schema
+COPY prisma ./prisma
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Copy all source
+COPY . .
+
+# Build Next.js
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npx next build
+
+# ---- Runner: minimal production image ----
+FROM new_invoice-web:latest AS runner
+
+USER root
+WORKDIR /app
+
+# Switch to IUT mirror (Iranian) for Alpine packages
+RUN echo 'http://repo.iut.ac.ir/repo/alpine/v3.22/main' > /etc/apk/repositories && \
+    echo 'http://repo.iut.ac.ir/repo/alpine/v3.22/community' >> /etc/apk/repositories
+
+# Install Chromium and required fonts
+RUN apk update && apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    font-noto \
+    font-noto-arabic \
+    ttf-freefont \
+    && rm -rf /var/cache/apk/*
+
+# Set Chromium path for puppeteer
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Replace build output with the new one
+RUN rm -rf .next public server.js package.json prisma
+COPY --from=builder /build/.next/standalone ./
+COPY --from=builder /build/.next/static ./.next/static
+COPY --from=builder /build/public ./public
+COPY --from=builder /build/prisma ./prisma
+COPY --from=builder /build/node_modules ./node_modules
+
+# Re-generate Prisma client for production
+RUN npx prisma generate
+
+# Copy entrypoint
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Back to non-root user
+USER nextjs
+
+EXPOSE 3000
+ENV PORT=3000
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "const http=require('http');const host=process.env.HOSTNAME||'127.0.0.1';http.get('http://'+host+':3000/api/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["/usr/local/bin/docker-entrypoint.sh"]

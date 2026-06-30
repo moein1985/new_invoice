@@ -114,7 +114,7 @@ export const userRouter = createTRPCRouter({
         fullName: z.string().min(1),
         email: z.string().email(),
         phone: z.string().regex(/^[0-9]{11}$/, 'شماره تلفن باید 11 رقم باشد'),
-        role: z.enum(['ADMIN', 'MANAGER', 'USER']),
+        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR']),
         isActive: z.boolean().default(true),
       })
     )
@@ -154,7 +154,7 @@ export const userRouter = createTRPCRouter({
         fullName: z.string().min(1).optional(),
         email: z.string().email().optional(),
         phone: z.string().regex(/^[0-9]{11}$/, 'شماره تلفن باید 11 رقم باشد').optional(),
-        role: z.enum(['ADMIN', 'MANAGER', 'USER']).optional(),
+        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR']).optional(),
         isActive: z.boolean().optional(),
         password: z.string().min(6).optional(),
       })
@@ -199,6 +199,57 @@ export const userRouter = createTRPCRouter({
 
       return ctx.prisma.user.delete({
         where: { id: input.id },
+      });
+    }),
+
+  // Get SIP settings for current user
+  getSipSettings: protectedProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.user.findUnique({
+      where: { id: ctx.session.user.id },
+      select: {
+        sipServer: true,
+        sipPort: true,
+        sipUsername: true,
+        sipPassword: true,
+        sipExtension: true,
+        sipEnabled: true,
+        sipTransport: true,
+        physicalExtension: true,
+        trunkPrefix: true,
+      },
+    });
+  }),
+
+  // Update SIP settings for current user
+  updateSipSettings: protectedProcedure
+    .input(
+      z.object({
+        sipServer: z.string().max(255).optional().nullable(),
+        sipPort: z.number().int().min(1).max(65535).optional().nullable(),
+        sipUsername: z.string().max(100).optional().nullable(),
+        sipPassword: z.string().max(100).optional().nullable(),
+        sipExtension: z.string().max(20).optional().nullable(),
+        sipEnabled: z.boolean().optional(),
+        sipTransport: z.enum(['ws', 'wss']).optional().nullable(),
+        physicalExtension: z.string().max(20).optional().nullable(),
+        trunkPrefix: z.string().max(10).optional().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.user.update({
+        where: { id: ctx.session.user.id },
+        data: input,
+        select: {
+          sipServer: true,
+          sipPort: true,
+          sipUsername: true,
+          sipPassword: true,
+          sipExtension: true,
+          sipEnabled: true,
+          sipTransport: true,
+          physicalExtension: true,
+          trunkPrefix: true,
+        },
       });
     }),
 });

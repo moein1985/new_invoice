@@ -1,10 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
 import moment from 'moment-jalaali';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ProfileSkeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { Pencil, Trash2, Loader2, FileText, CheckCircle, XCircle, Crown, Briefcase, User } from 'lucide-react';
 
 const ROLES: Record<string, string> = {
   ADMIN: 'مدیر',
@@ -40,11 +45,7 @@ export default function UserDetailPage() {
   });
 
   if (status === 'loading' || isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">در حال بارگذاری...</div>
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (!session) {
@@ -73,14 +74,14 @@ export default function UserDetailPage() {
     return moment(date).format('jYYYY/jM/jD');
   };
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const handleDelete = () => {
     if (user.id === session.user.id) {
       alert('شما نمی‌توانید خودتان را حذف کنید');
       return;
     }
-    if (confirm(`آیا از حذف کاربر "${user.fullName}" اطمینان دارید؟`)) {
-      deleteMutation.mutate({ id });
-    }
+    setShowDeleteConfirm(true);
   };
 
   return (
@@ -89,27 +90,22 @@ export default function UserDetailPage() {
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-3xl font-bold" style={{ color: '#1a1a1a' }}>
-                جزئیات کاربر
-              </h1>
-              <Link href="/users" className="text-gray-500 hover:text-gray-700">
-                بازگشت ←
-              </Link>
-            </div>
+            <h1 className="text-3xl font-bold" style={{ color: '#1a1a1a' }}>
+              جزئیات کاربر
+            </h1>
             <div className="flex gap-2">
               <Link
                 href={`/users/edit/${id}`}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
               >
-                ✏️ ویرایش
+                <Pencil className="h-4 w-4" /> ویرایش
               </Link>
               <button
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending || user.id === session.user.id}
                 className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {deleteMutation.isPending ? '⏳ در حال حذف...' : '🗑️ حذف'}
+                {deleteMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> در حال حذف...</> : <><Trash2 className="h-4 w-4" /> حذف</>}
               </button>
             </div>
           </div>
@@ -118,6 +114,10 @@ export default function UserDetailPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumb items={[
+          { label: 'کاربران', href: '/users' },
+          { label: user?.fullName || 'جزئیات کاربر' },
+        ]} />
         <div className="grid gap-6 lg:grid-cols-3">
           {/* User Info Card */}
           <div className="lg:col-span-1">
@@ -125,7 +125,7 @@ export default function UserDetailPage() {
               <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white">
                 <div className="flex items-center gap-3">
                   <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-3xl">
-                    {user.role === 'ADMIN' ? '👑' : user.role === 'MANAGER' ? '👔' : '👤'}
+                    {user.role === 'ADMIN' ? <Crown className="h-8 w-8" /> : user.role === 'MANAGER' ? <Briefcase className="h-8 w-8" /> : <User className="h-8 w-8" />}
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">{user.fullName}</h2>
@@ -155,7 +155,7 @@ export default function UserDetailPage() {
                         : 'bg-red-100 text-red-800 border-red-300'
                     }`}
                   >
-                    {user.isActive ? '✅ فعال' : '❌ غیرفعال'}
+                    {user.isActive ? <><CheckCircle className="inline h-4 w-4" /> فعال</> : <><XCircle className="inline h-4 w-4" /> غیرفعال</>}
                   </span>
                 </div>
 
@@ -184,7 +184,7 @@ export default function UserDetailPage() {
                 <div className="overflow-hidden rounded-lg bg-white shadow">
                   <div className="bg-blue-50 p-4">
                     <div className="flex items-center gap-3">
-                      <div className="text-4xl">📄</div>
+                      <FileText className="h-10 w-10 text-blue-400" />
                       <div>
                         <p className="text-sm text-gray-600">اسناد ایجاد شده</p>
                         <p className="text-3xl font-bold text-blue-600">
@@ -198,7 +198,7 @@ export default function UserDetailPage() {
                 <div className="overflow-hidden rounded-lg bg-white shadow">
                   <div className="bg-purple-50 p-4">
                     <div className="flex items-center gap-3">
-                      <div className="text-4xl">✅</div>
+                      <CheckCircle className="h-10 w-10 text-purple-400" />
                       <div>
                         <p className="text-sm text-gray-600">تاییدیه‌های انجام شده</p>
                         <p className="text-3xl font-bold text-purple-600">
@@ -222,19 +222,19 @@ export default function UserDetailPage() {
                     {user.role === 'ADMIN' && (
                       <>
                         <div className="flex items-center gap-2 text-green-600">
-                          <span className="text-xl">✅</span>
+                          <CheckCircle className="h-5 w-5" />
                           <span className="font-bold">مدیریت کامل سیستم</span>
                         </div>
                         <div className="flex items-center gap-2 text-green-600">
-                          <span className="text-xl">✅</span>
+                          <CheckCircle className="h-5 w-5" />
                           <span>مدیریت کاربران</span>
                         </div>
                         <div className="flex items-center gap-2 text-green-600">
-                          <span className="text-xl">✅</span>
+                          <CheckCircle className="h-5 w-5" />
                           <span>تایید/رد اسناد</span>
                         </div>
                         <div className="flex items-center gap-2 text-green-600">
-                          <span className="text-xl">✅</span>
+                          <CheckCircle className="h-5 w-5" />
                           <span>مشاهده گزارشات</span>
                         </div>
                       </>
@@ -242,19 +242,19 @@ export default function UserDetailPage() {
                     {user.role === 'MANAGER' && (
                       <>
                         <div className="flex items-center gap-2 text-blue-600">
-                          <span className="text-xl">✅</span>
+                          <CheckCircle className="h-5 w-5" />
                           <span className="font-bold">تایید/رد اسناد</span>
                         </div>
                         <div className="flex items-center gap-2 text-blue-600">
-                          <span className="text-xl">✅</span>
+                          <CheckCircle className="h-5 w-5" />
                           <span>مشاهده گزارشات</span>
                         </div>
                         <div className="flex items-center gap-2 text-blue-600">
-                          <span className="text-xl">✅</span>
+                          <CheckCircle className="h-5 w-5" />
                           <span>ایجاد اسناد</span>
                         </div>
                         <div className="flex items-center gap-2 text-red-600">
-                          <span className="text-xl">❌</span>
+                          <XCircle className="h-5 w-5" />
                           <span>مدیریت کاربران</span>
                         </div>
                       </>
@@ -262,19 +262,19 @@ export default function UserDetailPage() {
                     {user.role === 'USER' && (
                       <>
                         <div className="flex items-center gap-2 text-green-600">
-                          <span className="text-xl">✅</span>
+                          <CheckCircle className="h-5 w-5" />
                           <span className="font-bold">ایجاد اسناد</span>
                         </div>
                         <div className="flex items-center gap-2 text-green-600">
-                          <span className="text-xl">✅</span>
+                          <CheckCircle className="h-5 w-5" />
                           <span>مشاهده اسناد خود</span>
                         </div>
                         <div className="flex items-center gap-2 text-red-600">
-                          <span className="text-xl">❌</span>
+                          <XCircle className="h-5 w-5" />
                           <span>تایید/رد اسناد</span>
                         </div>
                         <div className="flex items-center gap-2 text-red-600">
-                          <span className="text-xl">❌</span>
+                          <XCircle className="h-5 w-5" />
                           <span>مدیریت کاربران</span>
                         </div>
                       </>
@@ -327,6 +327,20 @@ export default function UserDetailPage() {
           </div>
         </div>
       </main>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          deleteMutation.mutate({ id });
+          setShowDeleteConfirm(false);
+        }}
+        title={`حذف کاربر ${user.fullName}`}
+        message="آیا از حذف این کاربر اطمینان دارید؟ این عملیات قابل بازگشت نیست."
+        confirmText="حذف کاربر"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

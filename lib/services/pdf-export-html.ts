@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { generateDocumentPDF } from './pdf-export';
 
 interface DocumentItem {
   productName: string;
@@ -55,6 +56,11 @@ const formatDate = (date: string | Date): string => {
 };
 
 export const generateDocumentPDFFromHTML = async (doc: Document) => {
+  // Legacy path retained for backward compatibility. Canonical path uses pdfmake.
+  console.warn('[DEPRECATED] generateDocumentPDFFromHTML is deprecated. Using generateDocumentPDF instead.');
+  await generateDocumentPDF(doc as any);
+  return;
+
   const showInternal = doc.documentType === 'TEMP_PROFORMA';
 
   // Calculate totals

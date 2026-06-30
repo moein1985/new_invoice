@@ -1,10 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
 import moment from 'moment-jalaali';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ProfileSkeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { Pencil, Trash2, Loader2, FileText, CheckCircle, XCircle, Clock, MessageSquare, User } from 'lucide-react';
 
 const DOC_TYPES: Record<string, string> = {
   TEMP_PROFORMA: 'پیش فاکتور موقت',
@@ -45,12 +50,10 @@ export default function CustomerDetailPage() {
     },
   });
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   if (status === 'loading' || isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">در حال بارگذاری...</div>
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (!session) {
@@ -82,9 +85,7 @@ export default function CustomerDetailPage() {
       alert('امکان حذف مشتری با سند وجود ندارد. ابتدا اسناد را حذف کنید.');
       return;
     }
-    if (confirm(`آیا از حذف مشتری "${customer.name}" اطمینان دارید؟`)) {
-      deleteMutation.mutate({ id });
-    }
+    setShowDeleteConfirm(true);
   };
 
   return (
@@ -93,27 +94,22 @@ export default function CustomerDetailPage() {
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-3xl font-bold" style={{ color: '#1a1a1a' }}>
-                جزئیات مشتری
-              </h1>
-              <Link href="/customers" className="text-gray-500 hover:text-gray-700">
-                بازگشت ←
-              </Link>
-            </div>
+            <h1 className="text-3xl font-bold" style={{ color: '#1a1a1a' }}>
+              جزئیات مشتری
+            </h1>
             <div className="flex gap-2">
               <Link
                 href={`/customers/edit/${id}`}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
               >
-                ✏️ ویرایش
+                <Pencil className="h-4 w-4" /> ویرایش
               </Link>
               <button
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending || documentCount > 0}
                 className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {deleteMutation.isPending ? '⏳ در حال حذف...' : '🗑️ حذف'}
+                {deleteMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> در حال حذف...</> : <><Trash2 className="h-4 w-4" /> حذف</>}
               </button>
             </div>
           </div>
@@ -122,14 +118,18 @@ export default function CustomerDetailPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumb items={[
+          { label: 'مشتریان', href: '/customers' },
+          { label: customer?.name || 'جزئیات مشتری' },
+        ]} />
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Customer Info Card */}
           <div className="lg:col-span-1">
             <div className="overflow-hidden rounded-lg bg-white shadow">
               <div className="bg-blue-600 p-6 text-white">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-2xl text-blue-600">
-                    👤
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-blue-600">
+                    <User className="h-8 w-8" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">{customer.name}</h2>
@@ -221,7 +221,7 @@ export default function CustomerDetailPage() {
               <div className="p-6">
                 {documentCount === 0 ? (
                   <div className="py-12 text-center text-gray-500">
-                    <div className="text-6xl mb-4">📄</div>
+                    <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                     <p className="text-xl">هنوز سندی ثبت نشده است</p>
                     <Link
                       href={`/documents/new?customerId=${id}`}
@@ -240,7 +240,7 @@ export default function CustomerDetailPage() {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
-                            <div className="text-3xl">📄</div>
+                            <FileText className="h-8 w-8 text-blue-400" />
                             <div>
                               <div className="flex items-center gap-2">
                                 <p className="font-bold" style={{ color: '#1a1a1a' }}>
@@ -265,16 +265,16 @@ export default function CustomerDetailPage() {
                             </p>
                             <p className="text-xs text-gray-500">
                               {doc.approvalStatus === 'APPROVED'
-                                ? '✅ تایید شده'
+                                ? <><CheckCircle className="inline h-3.5 w-3.5" /> تایید شده</>
                                 : doc.approvalStatus === 'REJECTED'
-                                ? '❌ رد شده'
-                                : '⏳ در انتظار'}
+                                ? <><XCircle className="inline h-3.5 w-3.5" /> رد شده</>
+                                : <><Clock className="inline h-3.5 w-3.5" /> در انتظار</>}
                             </p>
                           </div>
                         </div>
                         {doc.notes && (
                           <div className="mt-2 text-sm text-gray-600 border-t pt-2">
-                            💬 {doc.notes.substring(0, 100)}
+                          <MessageSquare className="inline h-4 w-4 ml-1" /> {doc.notes.substring(0, 100)}
                             {doc.notes.length > 100 && '...'}
                           </div>
                         )}
@@ -298,6 +298,20 @@ export default function CustomerDetailPage() {
           </div>
         </div>
       </main>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          deleteMutation.mutate({ id });
+          setShowDeleteConfirm(false);
+        }}
+        title={`حذف مشتری ${customer.name}`}
+        message="آیا از حذف این مشتری اطمینان دارید؟ این عملیات قابل بازگشت نیست."
+        confirmText="حذف مشتری"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

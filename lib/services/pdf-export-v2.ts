@@ -4,6 +4,7 @@
  */
 
 import jsPDF from 'jspdf';
+import { generateDocumentPDF } from './pdf-export';
 
 interface DocumentItem {
   productName: string;
@@ -59,7 +60,12 @@ const formatDate = (date: string | Date): string => {
   return new Date(date).toLocaleDateString('fa-IR');
 };
 
-export const generateDocumentPDFV2 = (document: Document) => {
+export const generateDocumentPDFV2 = async (document: Document) => {
+  // Legacy path retained for backward compatibility. Canonical path uses pdfmake.
+  console.warn('[DEPRECATED] generateDocumentPDFV2 is deprecated. Using generateDocumentPDF instead.');
+  await generateDocumentPDF(document as any);
+  return;
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',

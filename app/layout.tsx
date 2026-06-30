@@ -5,6 +5,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "سیستم مدیریت فاکتور",
@@ -24,7 +25,9 @@ export default function RootLayout({
             <AuthProvider>
               <TRPCProvider>
                 <ToastProvider>
-                  {children}
+                  <AppShell>
+                    {children}
+                  </AppShell>
                 </ToastProvider>
               </TRPCProvider>
             </AuthProvider>

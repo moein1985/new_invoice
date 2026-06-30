@@ -10,6 +10,9 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { Pagination } from '@/components/ui/pagination';
 import { exportCustomersToExcel } from '@/lib/services/excel-export';
 import { Download } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { PageSkeleton, TableSkeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 export default function CustomersPage() {
   const { data: session, status } = useSession();
@@ -27,6 +30,8 @@ export default function CustomersPage() {
     address?: string | null;
     _count?: { documents: number };
   } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Fetch customers with search
   const { data: customers, isLoading, refetch } = trpc.customer.list.useQuery({
@@ -79,11 +84,7 @@ export default function CustomersPage() {
   });
 
   if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">در حال بارگذاری...</div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!session) {
@@ -109,9 +110,40 @@ export default function CustomersPage() {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (confirm(`آیا از حذف مشتری "${name}" اطمینان دارید؟`)) {
-      deleteMutation.mutate({ id });
+    setDeleteTarget({ id, name });
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (!customers?.data) return;
+    if (selectedIds.size === customers.data.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(customers.data.map((c) => c.id)));
     }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const deletable = customers?.data.filter((c: any) => selectedIds.has(c.id) && (!c._count?.documents || c._count.documents === 0)) || [];
+    if (deletable.length === 0) {
+      toast.warning('هیچ‌کدام از مشتریان انتخاب‌شده قابل حذف نیستند (دارای سند هستند)');
+      return;
+    }
+    const count = deletable.length;
+    for (const c of deletable) {
+      await deleteMutation.mutateAsync({ id: (c as any).id });
+    }
+    setSelectedIds(new Set());
+    refetch();
+    toast.success(`${count} مشتری با موفقیت حذف شد`);
   };
 
   return (
@@ -120,12 +152,7 @@ export default function CustomersPage() {
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-gray-500 hover:text-gray-700">
-                ← بازگشت
-              </Link>
-              <h1 className="text-3xl font-bold text-gray-900">مشتریان</h1>
-            </div>
+            <h1 className="text-3xl font-bold text-gray-900">مشتریان</h1>
             <div className="flex gap-3">
               <button
                 onClick={() => {
@@ -156,8 +183,9 @@ export default function CustomersPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumb items={[{ label: 'مشتریان' }]} />
         {/* Search */}
-        <div className="mb-6">
+        <div className="mb-6 space-y-2">
           <input
             type="text"
             placeholder="جستجو در مشتریان..."
@@ -165,12 +193,60 @@ export default function CustomersPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none"
           />
+          {search.trim() && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800"
+              >
+                جستجو: {search} ✕
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Bulk Action Bar */}
+        {selectedIds.size > 0 && (
+          <div className="mb-4 flex items-center gap-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+            <span className="text-sm font-bold text-blue-800">
+              {selectedIds.size} مشتری انتخاب شده
+            </span>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={deleteMutation.isPending}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              حذف انتخاب‌شده‌ها
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (customers?.data) {
+                  const selectedCustomers = customers.data.filter((c: any) => selectedIds.has(c.id));
+                  exportCustomersToExcel(selectedCustomers, 'selected-customers.xlsx');
+                  toast.success('فایل Excel انتخاب‌شده‌ها دانلود شد');
+                }
+              }}
+              className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
+            >
+              دانلود Excel انتخاب‌شده‌ها
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="mr-auto text-sm text-gray-600 hover:text-gray-800"
+            >
+              لغو انتخاب
+            </button>
+          </div>
+        )}
 
         {/* Customers - Table for desktop, Cards for mobile */}
         <div className="overflow-hidden bg-white shadow sm:rounded-lg">
           {isLoading ? (
-            <div className="p-8 text-center">در حال بارگذاری...</div>
+            <TableSkeleton columns={6} rows={10} />
           ) : !customers?.data.length ? (
             <div className="p-8 text-center text-gray-500">
               هیچ مشتری‌ای یافت نشد
@@ -181,6 +257,14 @@ export default function CustomersPage() {
               <table className="hidden md:table min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="w-10 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={customers.data.length > 0 && selectedIds.size === customers.data.length}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
                     کد
                   </th>
@@ -203,7 +287,15 @@ export default function CustomersPage() {
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {customers.data.map((customer) => (
-                  <tr key={customer.id} className="hover:bg-gray-50">
+                  <tr key={customer.id} className={`hover:bg-gray-50 ${selectedIds.has(customer.id) ? 'bg-blue-50' : ''}`}>
+                    <td className="w-10 px-3 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(customer.id)}
+                        onChange={() => toggleSelect(customer.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
                       {customer.code}
                     </td>
@@ -346,7 +438,7 @@ export default function CustomersPage() {
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">نام</label>
+                  <label className="block text-sm font-medium text-gray-700">نام <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     name="name"
@@ -356,7 +448,7 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">تلفن *</label>
+                  <label className="block text-sm font-medium text-gray-700">تلفن <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     name="phone"
@@ -406,6 +498,23 @@ export default function CustomersPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMutation.mutate({ id: deleteTarget.id }, {
+              onSuccess: () => setDeleteTarget(null),
+            });
+          }
+        }}
+        title={`حذف مشتری ${deleteTarget?.name ?? ''}`}
+        message="آیا از حذف این مشتری اطمینان دارید؟ این عملیات قابل بازگشت نیست."
+        confirmText="حذف مشتری"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
 
     </div>
   );

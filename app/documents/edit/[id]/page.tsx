@@ -6,6 +6,10 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
 import moment from 'moment-jalaali';
+import { useToast } from '@/components/ui/toast-provider';
+import { DisplaySettingsPanel, DEFAULT_DISPLAY_SETTINGS, parseDisplaySettings, type DisplaySettings } from '@/components/ui/display-settings';
+import { PageSkeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 const DOC_TYPES = {
   TEMP_PROFORMA: 'پیش فاکتور موقت',
@@ -34,14 +38,21 @@ export default function EditDocumentPage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
+  const toast = useToast();
 
   const [customerId, setCustomerId] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('');
+  const [showValidation, setShowValidation] = useState(false);
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [focusNewItemId, setFocusNewItemId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState('');
   const [docType, setDocType] = useState('TEMP_PROFORMA');
   const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
   const [persianDate, setPersianDate] = useState('');
   const [notes, setNotes] = useState('');
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>({ ...DEFAULT_DISPLAY_SETTINGS });
   const [items, setItems] = useState<DocumentItem[]>([
     { 
       id: '1', 
@@ -59,7 +70,7 @@ export default function EditDocumentPage() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Fetch document data
-  const { data: document, isLoading: documentLoading } = trpc.document.getById.useQuery(
+  const { data: docData, isLoading: documentLoading } = trpc.document.getById.useQuery(
     { id },
     { enabled: !!id }
   );
@@ -68,12 +79,20 @@ export default function EditDocumentPage() {
   const { data: customersData } = trpc.customer.list.useQuery({
     page: 1,
     limit: 100,
+    search: debouncedCustomerSearch || undefined,
   });
+
+  // Fetch suppliers for dropdown
+  const { data: suppliersData } = trpc.supplier.getAll.useQuery();
 
   // Update mutation
   const updateMutation = trpc.document.update.useMutation({
     onSuccess: () => {
+      toast.success('سند با موفقیت ویرایش شد');
       router.push(`/documents/${id}`);
+    },
+    onError: (error) => {
+      toast.error('خطا در ویرایش سند', error.message);
     },
   });
 
@@ -83,18 +102,37 @@ export default function EditDocumentPage() {
     setPersianDate(jalali);
   }, [docDate]);
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedCustomerSearch(customerSearch);
+    }, 350);
+
+    return () => clearTimeout(t);
+  }, [customerSearch]);
+
+  useEffect(() => {
+    if (!focusNewItemId) return;
+    const input = window.document.querySelector(
+      `input[data-item-id="${focusNewItemId}"][data-focus="productName"]`
+    ) as HTMLInputElement | null;
+    if (input) {
+      input.focus();
+      setFocusNewItemId(null);
+    }
+  }, [focusNewItemId, items]);
   // Load document data into form
   useEffect(() => {
-    if (document && !isLoaded) {
-      setCustomerId(document.customer.id);
-      setProjectName(document.projectName || '');
-      setDocType(document.documentType);
-      setDocDate(new Date(document.issueDate).toISOString().split('T')[0]);
-      setNotes(document.notes || '');
-      setDiscountAmount(document.discountAmount || 0);
+    if (docData && !isLoaded) {
+      setCustomerId(docData.customer.id);
+      setProjectName(docData.projectName || '');
+      setDocType(docData.documentType);
+      setDocDate(new Date(docData.issueDate).toISOString().split('T')[0]);
+      setNotes(docData.notes || '');
+      setDiscountAmount(docData.discountAmount || 0);
+      setDisplaySettings(parseDisplaySettings((docData as any).displaySettings));
       
       setItems(
-        document.items.map((item: any) => ({
+        docData.items.map((item: any) => ({
           id: item.id,
           productName: item.productName,
           description: item.description || '',
@@ -110,14 +148,10 @@ export default function EditDocumentPage() {
       
       setIsLoaded(true);
     }
-  }, [document, isLoaded]);
+  }, [docData, isLoaded]);
 
   if (status === 'loading' || documentLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">در حال بارگذاری...</div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!session) {
@@ -125,7 +159,7 @@ export default function EditDocumentPage() {
     return null;
   }
 
-  if (!document) {
+  if (!docData) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-xl text-red-600">سند یافت نشد!</div>
@@ -134,10 +168,11 @@ export default function EditDocumentPage() {
   }
 
   const addItem = () => {
+    const id = Date.now().toString();
     setItems([
       ...items,
       {
-        id: Date.now().toString(),
+        id,
         productName: '',
         description: '',
         quantity: 1,
@@ -149,6 +184,7 @@ export default function EditDocumentPage() {
         isManualPrice: false,
       },
     ]);
+    setFocusNewItemId(id);
   };
 
   const removeItem = (itemId: string) => {
@@ -193,14 +229,15 @@ export default function EditDocumentPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setShowValidation(true);
     
     if (!customerId) {
-      alert('لطفاً مشتری را انتخاب کنید');
+      toast.warning('لطفاً مشتری را انتخاب کنید');
       return;
     }
 
     if (items.some((item) => !item.productName || item.quantity <= 0 || item.sellPrice < 0 || !item.unit || !item.supplier)) {
-      alert('لطفاً تمام اطلاعات اقلام را به درستی وارد کنید');
+      toast.warning('لطفاً تمام اطلاعات اقلام را به درستی وارد کنید');
       return;
     }
 
@@ -211,6 +248,7 @@ export default function EditDocumentPage() {
       issueDate: new Date(docDate),
       notes: notes || undefined,
       discountAmount: discountAmount || 0,
+      displaySettings,
       items: items.map((item) => ({
         productName: item.productName,
         description: item.description || undefined,
@@ -229,24 +267,50 @@ export default function EditDocumentPage() {
     return new Intl.NumberFormat('fa-IR').format(amount) + ' ریال';
   };
 
+  const getItemErrors = (item: DocumentItem) => {
+    return {
+      productName: !item.productName.trim() ? 'نام محصول الزامی است' : '',
+      supplier: !item.supplier.trim() ? 'تامین‌کننده الزامی است' : '',
+      unit: !item.unit.trim() ? 'واحد الزامی است' : '',
+      quantity: item.quantity <= 0 ? 'تعداد باید بیشتر از صفر باشد' : '',
+      purchasePrice: item.purchasePrice < 0 ? 'قیمت خرید نمی‌تواند منفی باشد' : '',
+      sellPrice: item.sellPrice < 0 ? 'قیمت فروش نمی‌تواند منفی باشد' : '',
+    };
+  };
+
+  const markTouched = (field: string) => {
+    setTouchedFields((prev) => new Set(prev).add(field));
+  };
+
+  const isFieldError = (field: string, error: string) => {
+    return error && (showValidation || touchedFields.has(field));
+  };
+
+  const handleItemFieldKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Enter' && !e.shiftKey && index === items.length - 1) {
+      e.preventDefault();
+      addItem();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl" style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}>
       {/* Header */}
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold" style={{ color: '#1a1a1a' }}>
-              ویرایش سند
-            </h1>
-            <Link href={`/documents/${id}`} className="text-gray-500 hover:text-gray-700">
-              بازگشت ←
-            </Link>
-          </div>
+          <h1 className="text-3xl font-bold" style={{ color: '#1a1a1a' }}>
+            ویرایش سند
+          </h1>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumb items={[
+          { label: 'اسناد', href: '/documents' },
+          { label: docData?.documentNumber || '', href: `/documents/${id}` },
+          { label: 'ویرایش' },
+        ]} />
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Document Info */}
           <div className="rounded-lg bg-white p-6 shadow">
@@ -256,7 +320,7 @@ export default function EditDocumentPage() {
             <div className="grid gap-4 md:grid-cols-3">
               <div>
                 <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
-                  نوع سند *
+                  نوع سند <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={docType}
@@ -274,11 +338,20 @@ export default function EditDocumentPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
-                  مشتری *
+                  مشتری <span className="text-red-500">*</span>
                 </label>
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  placeholder="جستجوی مشتری (نام یا کد)..."
+                  className="mt-1 mb-2 w-full rounded-lg border border-gray-300 px-3 py-2"
+                  style={{ color: '#2a2a2a' }}
+                />
                 <select
                   value={customerId}
                   onChange={(e) => setCustomerId(e.target.value)}
+                  onBlur={() => markTouched('customerId')}
                   required
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                   style={{ color: '#2a2a2a' }}
@@ -290,6 +363,9 @@ export default function EditDocumentPage() {
                     </option>
                   ))}
                 </select>
+                {(showValidation || touchedFields.has('customerId')) && !customerId && (
+                  <p className="mt-1 text-xs text-red-600">انتخاب مشتری الزامی است</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
@@ -306,7 +382,7 @@ export default function EditDocumentPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
-                  تاریخ سند *
+                  تاریخ سند <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -367,7 +443,8 @@ export default function EditDocumentPage() {
 
             <div className="space-y-4">
               {items.map((item, index) => (
-                <div key={item.id} className="rounded-lg border border-gray-200 p-4">
+                <div key={item.id}>
+                <div className="rounded-lg border border-gray-200 p-4">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="font-medium" style={{ color: '#1a1a1a' }}>
                       قلم {index + 1}
@@ -385,48 +462,71 @@ export default function EditDocumentPage() {
                   <div className="grid gap-3 md:grid-cols-4">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
-                        نام محصول *
+                        نام محصول <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
+                        data-item-id={item.id}
+                        data-focus="productName"
                         value={item.productName}
                         onChange={(e) => updateItem(item.id, 'productName', e.target.value)}
+                        onBlur={() => markTouched(`${item.id}.productName`)}
+                        onKeyDown={(e) => handleItemFieldKeyDown(e, index)}
                         required
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                         style={{ color: '#2a2a2a' }}
                       />
+                      {isFieldError(`${item.id}.productName`, getItemErrors(item).productName) && (
+                        <p className="mt-1 text-xs text-red-600">{getItemErrors(item).productName}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
-                        تأمین‌کننده *
+                        تأمین‌کننده <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={item.supplier}
                         onChange={(e) => updateItem(item.id, 'supplier', e.target.value)}
+                        onBlur={() => markTouched(`${item.id}.supplier`)}
                         required
-                        className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                        className="mt-1 w-full rounded border border-gray-300 px-3 py-2 bg-white"
                         style={{ color: '#2a2a2a' }}
-                      />
+                      >
+                        <option value="">انتخاب کنید...</option>
+                        {suppliersData?.map((s) => (
+                          <option key={s.id} value={s.name}>{s.name}</option>
+                        ))}
+                        {item.supplier && !suppliersData?.some(s => s.name === item.supplier) && (
+                          <option value={item.supplier}>{item.supplier}</option>
+                        )}
+                      </select>
+                      {isFieldError(`${item.id}.supplier`, getItemErrors(item).supplier) && (
+                        <p className="mt-1 text-xs text-red-600">{getItemErrors(item).supplier}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
-                        واحد *
+                        واحد <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={item.unit}
                         onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
+                        onBlur={() => markTouched(`${item.id}.unit`)}
+                        onKeyDown={(e) => handleItemFieldKeyDown(e, index)}
                         required
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                         style={{ color: '#2a2a2a' }}
                       />
+                      {isFieldError(`${item.id}.unit`, getItemErrors(item).unit) && (
+                        <p className="mt-1 text-xs text-red-600">{getItemErrors(item).unit}</p>
+                      )}
                     </div>
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-4">
                     <div>
                       <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
-                        تعداد *
+                        تعداد <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
@@ -434,14 +534,19 @@ export default function EditDocumentPage() {
                         step="0.01"
                         value={item.quantity}
                         onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                        onBlur={() => markTouched(`${item.id}.quantity`)}
+                        onKeyDown={(e) => handleItemFieldKeyDown(e, index)}
                         required
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                         style={{ color: '#2a2a2a' }}
                       />
+                      {isFieldError(`${item.id}.quantity`, getItemErrors(item).quantity) && (
+                        <p className="mt-1 text-xs text-red-600">{getItemErrors(item).quantity}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
-                        قیمت خرید *
+                        قیمت خرید <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
@@ -449,14 +554,19 @@ export default function EditDocumentPage() {
                         step="1"
                         value={item.purchasePrice}
                         onChange={(e) => updateItem(item.id, 'purchasePrice', parseFloat(e.target.value) || 0)}
+                        onBlur={() => markTouched(`${item.id}.purchasePrice`)}
+                        onKeyDown={(e) => handleItemFieldKeyDown(e, index)}
                         required
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                         style={{ color: '#2a2a2a' }}
                       />
+                      {isFieldError(`${item.id}.purchasePrice`, getItemErrors(item).purchasePrice) && (
+                        <p className="mt-1 text-xs text-red-600">{getItemErrors(item).purchasePrice}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
-                        قیمت فروش *
+                        قیمت فروش <span className="text-red-500">*</span>
                         <label className="mr-2 inline-flex items-center text-xs font-normal">
                           <input
                             type="checkbox"
@@ -473,11 +583,16 @@ export default function EditDocumentPage() {
                         step="1"
                         value={item.sellPrice}
                         onChange={(e) => updateItem(item.id, 'sellPrice', parseFloat(e.target.value) || 0)}
+                        onBlur={() => markTouched(`${item.id}.sellPrice`)}
+                        onKeyDown={(e) => handleItemFieldKeyDown(e, index)}
                         required
                         disabled={!item.isManualPrice}
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500"
                         style={{ color: '#2a2a2a' }}
                       />
+                      {isFieldError(`${item.id}.sellPrice`, getItemErrors(item).sellPrice) && (
+                        <p className="mt-1 text-xs text-red-600">{getItemErrors(item).sellPrice}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium" style={{ color: '#1a1a1a' }}>
@@ -489,6 +604,7 @@ export default function EditDocumentPage() {
                         step="0.1"
                         value={item.profitPercentage}
                         onChange={(e) => updateItem(item.id, 'profitPercentage', parseFloat(e.target.value) || 0)}
+                        onKeyDown={(e) => handleItemFieldKeyDown(e, index)}
                         disabled={item.isManualPrice}
                         className="mt-1 w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500"
                         style={{ color: '#2a2a2a' }}
@@ -503,6 +619,7 @@ export default function EditDocumentPage() {
                       type="text"
                       value={item.description}
                       onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                      onKeyDown={(e) => handleItemFieldKeyDown(e, index)}
                       className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                       style={{ color: '#2a2a2a' }}
                     />
@@ -515,6 +632,23 @@ export default function EditDocumentPage() {
                       جمع: {formatCurrency(calculateItemTotal(item))}
                     </div>
                   </div>
+                </div>
+                <div className="flex justify-center py-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newId = Date.now().toString();
+                      setItems([
+                        ...items.slice(0, index + 1),
+                        { id: newId, productName: '', description: '', quantity: 1, unit: 'عدد', purchasePrice: 0, sellPrice: 0, supplier: '', profitPercentage: 20, isManualPrice: false },
+                        ...items.slice(index + 1),
+                      ]);
+                    }}
+                    className="flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-3 py-1 text-xs text-gray-500 hover:border-green-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                  >
+                    + افزودن قلم
+                  </button>
+                </div>
                 </div>
               ))}
             </div>
@@ -541,6 +675,27 @@ export default function EditDocumentPage() {
               </div>
             </div>
           </div>
+
+          <div className="sticky top-20 rounded-lg border border-blue-200 bg-blue-50 p-4 shadow-sm">
+            <h3 className="mb-3 text-sm font-bold text-blue-900">خلاصه سند</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between" style={{ color: '#2a2a2a' }}>
+                <span>تعداد اقلام:</span>
+                <span className="font-semibold">{items.length}</span>
+              </div>
+              <div className="flex items-center justify-between" style={{ color: '#2a2a2a' }}>
+                <span>مجموع تعداد:</span>
+                <span className="font-semibold">{items.reduce((sum, item) => sum + item.quantity, 0)}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-blue-200 pt-2 text-base font-bold text-blue-700">
+                <span>مبلغ قابل پرداخت:</span>
+                <span>{formatCurrency(calculateGrandTotal() - discountAmount)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Display Settings */}
+          <DisplaySettingsPanel settings={displaySettings} onChange={setDisplaySettings} />
 
           {/* Actions */}
           <div className="flex gap-3">

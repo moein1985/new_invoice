@@ -6,6 +6,15 @@ import { statsRouter } from './routers/stats';
 import { backupRouter } from './routers/backup';
 import { searchRouter } from './routers/search';
 import { notificationRouter } from './routers/notification';
+import { projectRouter } from './routers/project';
+import { workReportRouter } from './routers/workReport';
+import { calendarRouter } from './routers/calendar';
+import { purchaseRouter } from './routers/purchase';
+import { supplierRouter } from './routers/supplier';
+import { contactRouter } from './routers/contact';
+import { amiRouter } from './routers/ami';
+import { systemSettingsRouter } from './routers/systemSettings';
+import { contractorDocRouter } from './routers/contractorDoc';
 
 /**
  * This is the primary router for your server.
@@ -19,6 +28,15 @@ export const appRouter = createTRPCRouter({
   backup: backupRouter,
   search: searchRouter,
   notification: notificationRouter,
+  project: projectRouter,
+  workReport: workReportRouter,
+  calendar: calendarRouter,
+  purchase: purchaseRouter,
+  supplier: supplierRouter,
+  contact: contactRouter,
+  ami: amiRouter,
+  systemSettings: systemSettingsRouter,
+  contractorDoc: contractorDocRouter,
 });
 
 // export type definition of API

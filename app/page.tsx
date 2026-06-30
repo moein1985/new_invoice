@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -18,9 +19,5 @@ export default function Home() {
     }
   }, [session, status, router]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-xl">در حال بارگذاری...</div>
-    </div>
-  );
+  return <PageSkeleton />;
 }

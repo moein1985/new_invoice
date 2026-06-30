@@ -1,5 +1,5 @@
 // Test script to debug PDF export issue
-import { generateDocumentPDFFromHTML } from '../lib/services/pdf-export-html';
+import { generateDocumentPDF } from '../lib/services/pdf-export';
 
 const mockDocument = {
   documentNumber: 'TEST-001',
@@ -40,12 +40,12 @@ console.log('Mock document:', JSON.stringify(mockDocument, null, 2));
 
 try {
   // Check if function exists
-  console.log('✅ Function imported:', typeof generateDocumentPDFFromHTML);
-  console.log('Function:', generateDocumentPDFFromHTML.toString().substring(0, 200));
+  console.log('✅ Function imported:', typeof generateDocumentPDF);
+  console.log('Function:', generateDocumentPDF.toString().substring(0, 200));
   
   // Try to call it
-  console.log('📝 Calling generateDocumentPDFFromHTML...');
-  generateDocumentPDFFromHTML(mockDocument as any);
+  console.log('📝 Calling generateDocumentPDF...');
+  generateDocumentPDF(mockDocument as any);
   console.log('✅ Function called successfully!');
 } catch (error) {
   console.error('❌ Error:', error);

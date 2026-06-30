@@ -9,6 +9,9 @@ import { useToast } from '@/components/ui/toast-provider';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Download, Upload, AlertTriangle, Database } from 'lucide-react';
 import CryptoJS from 'crypto-js';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { PageSkeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 // پسورد ثابت برای رمزنگاری/رمزگشایی
 const BACKUP_PASSWORD = 'admin123';
@@ -20,6 +23,7 @@ export default function BackupPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [clearExisting, setClearExisting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
 
   const exportMutation = trpc.backup.exportDatabase.useMutation({
     onSuccess: (data: any) => {
@@ -62,11 +66,7 @@ export default function BackupPage() {
   });
 
   if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">در حال بارگذاری...</div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!session) {
@@ -93,15 +93,12 @@ export default function BackupPage() {
       toast.error('لطفا یک فایل انتخاب کنید');
       return;
     }
+    setShowImportConfirm(true);
+  };
 
-    const confirmMessage = clearExisting
-      ? '⚠️ هشدار: با این کار تمام داده‌های موجود حذف شده و با داده‌های بکاپ جایگزین می‌شوند. آیا مطمئن هستید؟'
-      : 'داده‌های بکاپ وارد سیستم می‌شوند. آیا ادامه می‌دهید؟';
-
-    if (!confirm(confirmMessage)) {
-      return;
-    }
-
+  const executeImport = async () => {
+    if (!selectedFile) return;
+    setShowImportConfirm(false);
     setIsImporting(true);
 
     try {
@@ -147,21 +144,17 @@ export default function BackupPage() {
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-gray-500 hover:text-gray-700">
-                ← بازگشت
-              </Link>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-                <Database className="h-8 w-8" />
-                بکاپ و بازیابی
-              </h1>
-            </div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <Database className="h-8 w-8" />
+              بکاپ و بازیابی
+            </h1>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumb items={[{ label: 'بکاپ و بازیابی' }]} />
         <div className="space-y-6">
           {/* Export Section */}
           <div className="bg-white shadow sm:rounded-lg p-6">
@@ -276,6 +269,22 @@ export default function BackupPage() {
           </div>
         </div>
       </main>
+
+      <ConfirmDialog
+        open={showImportConfirm}
+        onClose={() => setShowImportConfirm(false)}
+        onConfirm={executeImport}
+        title="بازیابی از بکاپ"
+        message={
+          clearExisting
+            ? 'هشدار: با این کار تمام داده‌های موجود حذف شده و با داده‌های بکاپ جایگزین می‌شوند. آیا مطمئن هستید؟'
+            : 'داده‌های بکاپ وارد سیستم می‌شوند. آیا ادامه می‌دهید؟'
+        }
+        confirmText="بله، بازیابی شود"
+        cancelText="انصراف"
+        variant={clearExisting ? 'danger' : 'warning'}
+        loading={isImporting || importMutation.isPending}
+      />
     </div>
   );
 }

@@ -13,7 +13,9 @@ import {
   AlertTriangle,
   XCircle,
   FileText,
+  Calendar,
 } from 'lucide-react';
+import { Tooltip } from '@/components/ui/tooltip';
 
 interface Notification {
   id: string;
@@ -109,6 +111,8 @@ export function NotificationBell() {
       case 'ERROR':
       case 'APPROVAL_REJECTED':
         return <XCircle className="h-4 w-4 text-red-600" />;
+      case 'CALENDAR_REMINDER':
+        return <Calendar className="h-4 w-4 text-blue-600" />;
       case 'APPROVAL_REQUEST':
       case 'DOCUMENT_CREATED':
       case 'DOCUMENT_UPDATED':
@@ -134,17 +138,19 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={menuRef}>
       {/* Bell Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative flex items-center justify-center w-10 h-10 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
-      >
-        <Bell className="h-5 w-5 text-gray-600" />
-        {(unreadCount?.count ?? 0) > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-            {unreadCount!.count > 9 ? '9+' : unreadCount!.count}
-          </span>
-        )}
-      </button>
+      <Tooltip content="اعلان‌ها">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="relative flex items-center justify-center w-10 h-10 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+        >
+          <Bell className="h-5 w-5 text-gray-600" />
+          {(unreadCount?.count ?? 0) > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+              {unreadCount!.count > 9 ? '9+' : unreadCount!.count}
+            </span>
+          )}
+        </button>
+      </Tooltip>
 
       {/* Dropdown */}
       {isOpen && (

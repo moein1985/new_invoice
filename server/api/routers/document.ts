@@ -26,6 +26,11 @@ export const documentRouter = createTRPCRouter({
         page: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(10),
         documentType: z.enum(['TEMP_PROFORMA', 'PROFORMA', 'INVOICE', 'RETURN_INVOICE', 'RECEIPT', 'OTHER']).optional().nullable(),
+        types: z.array(z.enum(['TEMP_PROFORMA', 'PROFORMA', 'INVOICE', 'RETURN_INVOICE', 'RECEIPT', 'OTHER'])).optional().nullable(),
+        search: z.string().trim().max(200).optional().nullable(),
+        deepSearch: z.boolean().default(false),
+        dateFrom: z.coerce.date().optional().nullable(),
+        dateTo: z.coerce.date().optional().nullable(),
         approvalStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional().nullable(),
         customerId: z.string().uuid().optional().nullable(),
       })
@@ -34,9 +39,48 @@ export const documentRouter = createTRPCRouter({
       const skip = (input.page - 1) * input.limit;
 
       const where: any = {};
-      if (input.documentType) where.documentType = input.documentType;
+      if (input.types && input.types.length > 0) {
+        where.documentType = { in: input.types };
+      } else if (input.documentType) {
+        where.documentType = input.documentType;
+      }
       if (input.approvalStatus) where.approvalStatus = input.approvalStatus;
       if (input.customerId) where.customerId = input.customerId;
+      if (input.dateFrom || input.dateTo) {
+        const issueDate: any = {};
+        if (input.dateFrom) issueDate.gte = input.dateFrom;
+        if (input.dateTo) issueDate.lte = input.dateTo;
+        where.issueDate = issueDate;
+      }
+
+      const search = input.search?.trim();
+      if (search) {
+        const orConditions: any[] = [
+          { documentNumber: { contains: search, mode: 'insensitive' } },
+          { projectName: { contains: search, mode: 'insensitive' } },
+          { customer: { is: { name: { contains: search, mode: 'insensitive' } } } },
+        ];
+
+        if (input.deepSearch) {
+          orConditions.push(
+            { notes: { contains: search, mode: 'insensitive' } },
+            {
+              items: {
+                some: {
+                  OR: [
+                    { productName: { contains: search, mode: 'insensitive' } },
+                    { description: { contains: search, mode: 'insensitive' } },
+                    { supplier: { contains: search, mode: 'insensitive' } },
+                    { unit: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            }
+          );
+        }
+
+        where.OR = orConditions;
+      }
 
       const [documents, total] = await Promise.all([
         ctx.prisma.document.findMany({
@@ -47,7 +91,7 @@ export const documentRouter = createTRPCRouter({
           include: {
             customer: { select: { name: true } },
             createdBy: { select: { fullName: true } },
-            items: true,
+            _count: { select: { items: true } },
           },
         }),
         ctx.prisma.document.count({ where }),
@@ -58,6 +102,7 @@ export const documentRouter = createTRPCRouter({
           ...doc,
           customerName: doc.customer.name,
           createdByName: doc.createdBy.fullName,
+          itemsCount: doc._count.items,
         })),
         meta: {
           page: input.page,
@@ -65,6 +110,82 @@ export const documentRouter = createTRPCRouter({
           total,
           totalPages: Math.ceil(total / input.limit),
         },
+      };
+    }),
+
+  exportFiltered: protectedProcedure
+    .input(
+      z.object({
+        types: z.array(z.enum(['TEMP_PROFORMA', 'PROFORMA', 'INVOICE', 'RETURN_INVOICE', 'RECEIPT', 'OTHER'])).optional(),
+        search: z.string().trim().max(200).optional(),
+        deepSearch: z.boolean().default(false),
+        dateFrom: z.coerce.date().optional(),
+        dateTo: z.coerce.date().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const where: any = {};
+
+      if (input.types && input.types.length > 0) {
+        where.documentType = { in: input.types };
+      }
+
+      if (input.dateFrom || input.dateTo) {
+        const issueDate: any = {};
+        if (input.dateFrom) issueDate.gte = input.dateFrom;
+        if (input.dateTo) issueDate.lte = input.dateTo;
+        where.issueDate = issueDate;
+      }
+
+      const search = input.search?.trim();
+      if (search) {
+        const orConditions: any[] = [
+          { documentNumber: { contains: search, mode: 'insensitive' } },
+          { projectName: { contains: search, mode: 'insensitive' } },
+          { customer: { is: { name: { contains: search, mode: 'insensitive' } } } },
+        ];
+
+        if (input.deepSearch) {
+          orConditions.push(
+            { notes: { contains: search, mode: 'insensitive' } },
+            {
+              items: {
+                some: {
+                  OR: [
+                    { productName: { contains: search, mode: 'insensitive' } },
+                    { description: { contains: search, mode: 'insensitive' } },
+                    { supplier: { contains: search, mode: 'insensitive' } },
+                    { unit: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            }
+          );
+        }
+
+        where.OR = orConditions;
+      }
+
+      const documents = await ctx.prisma.document.findMany({
+        where,
+        take: 5000,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          customer: { select: { name: true } },
+          createdBy: { select: { fullName: true } },
+        },
+      });
+
+      return {
+        data: documents.map((doc) => ({
+          id: doc.id,
+          documentType: doc.documentType,
+          approvalStatus: doc.approvalStatus,
+          approvalOrder: doc.approvalOrder,
+          customerName: doc.customer.name,
+          totalAmount: doc.totalAmount,
+          createdAt: doc.createdAt,
+        })),
       };
     }),
 
@@ -121,6 +242,7 @@ export const documentRouter = createTRPCRouter({
         notes: z.string().optional().nullable(),
         attachment: z.string().optional().nullable(),
         defaultProfitPercentage: z.number().default(20),
+        displaySettings: z.record(z.string(), z.boolean()).optional(),
         items: z.array(documentItemSchema).min(1),
       })
     )
@@ -208,11 +330,12 @@ export const documentRouter = createTRPCRouter({
         id: z.string().uuid(),
         customerId: z.string().uuid().optional(),
         projectName: z.string().optional().nullable(),
-        issueDate: z.date().optional(),
-        dueDate: z.date().optional().nullable(),
+        issueDate: z.coerce.date().optional(),
+        dueDate: z.coerce.date().optional().nullable(),
         discountAmount: z.number().min(0).optional(),
         notes: z.string().optional().nullable(),
         attachment: z.string().optional().nullable(),
+        displaySettings: z.record(z.string(), z.boolean()).optional(),
         items: z.array(documentItemSchema).optional(),
       })
     )
@@ -515,5 +638,43 @@ export const documentRouter = createTRPCRouter({
     });
 
     return approvals;
+  }),
+
+  // Get stale documents (pending for more than 1 month, for managers/admins)
+  staleDocuments: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== 'ADMIN' && ctx.session.user.role !== 'MANAGER') {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'شما دسترسی به این بخش ندارید',
+      });
+    }
+
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+    const staleApprovals = await ctx.prisma.approval.findMany({
+      where: {
+        status: 'PENDING',
+        createdAt: {
+          lt: oneMonthAgo,
+        },
+        document: {
+          documentType: 'TEMP_PROFORMA',
+        },
+      },
+      include: {
+        document: {
+          include: {
+            customer: true,
+            createdBy: {
+              select: { fullName: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return staleApprovals;
   }),
 });

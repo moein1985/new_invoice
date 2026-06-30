@@ -61,11 +61,13 @@ export class ErrorBoundary extends Component<Props, State> {
               متأسفانه مشکلی در نمایش این صفحه به وجود آمده است.
             </p>
             
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {this.state.error && (
               <div className="mb-4 rounded bg-red-50 p-4">
                 <p className="mb-2 text-sm font-semibold text-red-800">جزئیات خطا:</p>
                 <pre className="overflow-auto text-xs text-red-700">
                   {this.state.error.message}
+                  {'\n'}
+                  {this.state.error.stack}
                 </pre>
               </div>
             )}

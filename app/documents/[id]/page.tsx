@@ -1,12 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
 import moment from 'moment-jalaali';
-import { generateDocumentPDFFromHTML } from '@/lib/services/pdf-export-html';
 import { generateDocumentExcel } from '@/lib/services/excel-export';
+import { useToast } from '@/components/ui/toast-provider';
+import { parseDisplaySettings } from '@/components/ui/display-settings';
+import { DetailSkeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { Pencil, ArrowLeft, FileText, Sheet, Printer, Clock, Loader2, Calendar, User, MessageSquare } from 'lucide-react';
 
 const DOC_TYPES: Record<string, string> = {
   TEMP_PROFORMA: 'پیش فاکتور موقت',
@@ -43,6 +48,9 @@ export default function DocumentDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
+  const toast = useToast();
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [isPdfGenerating, setIsPdfGenerating] = useState(false);
 
   const { data: document, isLoading, refetch } = trpc.document.getById.useQuery(
     { id },
@@ -51,20 +59,16 @@ export default function DocumentDetailPage() {
 
   const convertMutation = trpc.document.convert.useMutation({
     onSuccess: (newDoc) => {
-      alert(`سند با موفقیت تبدیل شد به ${DOC_TYPES[newDoc.documentType]}`);
+      toast.success('تبدیل سند با موفقیت انجام شد', `به ${DOC_TYPES[newDoc.documentType]} تبدیل شد`);
       router.push(`/documents/${newDoc.id}`);
     },
     onError: (error) => {
-      alert(`خطا: ${error.message}`);
+      toast.error('تبدیل سند ناموفق بود', error.message);
     },
   });
 
   if (status === 'loading' || isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">در حال بارگذاری...</div>
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (!session) {
@@ -108,67 +112,72 @@ export default function DocumentDetailPage() {
   const nextType = getNextDocumentType();
   const canConvert = nextType !== null && document.approvalStatus === 'APPROVED';
 
+  const ds = parseDisplaySettings((document as any).displaySettings);
+  const showInternal = document.documentType === 'TEMP_PROFORMA';
+
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl" style={{ fontFamily: 'Vazir, Tahoma, sans-serif' }}>
       {/* Header */}
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-3xl font-bold" style={{ color: '#1a1a1a' }}>
-                جزئیات سند
-              </h1>
-              <Link href="/documents" className="text-gray-500 hover:text-gray-700">
-                بازگشت ←
-              </Link>
-            </div>
+            <h1 className="text-3xl font-bold" style={{ color: '#1a1a1a' }}>
+              جزئیات سند
+            </h1>
             <div className="flex gap-2">
               <button
                 onClick={() => router.push(`/documents/edit/${id}`)}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
               >
-                ✏️ ویرایش
+                <Pencil className="h-4 w-4" /> ویرایش
               </button>
               {canConvert && (
                 <button
-                  onClick={() => {
-                    if (
-                      confirm(
-                        `آیا مطمئن هستید که می‌خواهید این سند را به ${DOC_TYPES[nextType]} تبدیل کنید؟`
-                      )
-                    ) {
-                      convertMutation.mutate({ id, toType: nextType });
-                    }
-                  }}
+                  onClick={() => setShowConvertModal(true)}
                   disabled={convertMutation.isPending}
                   className="rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {convertMutation.isPending ? '⏳ در حال تبدیل...' : `➡️ تبدیل به ${DOC_TYPES[nextType]}`}
+                  {convertMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> در حال تبدیل...</> : <><ArrowLeft className="h-4 w-4" /> تبدیل به {DOC_TYPES[nextType]}</>}
                 </button>
               )}
               <button
-                onClick={() => {
+                onClick={async () => {
+                  setIsPdfGenerating(true);
                   try {
-                    generateDocumentPDFFromHTML(document as any);
+                    const response = await fetch(`/api/documents/${id}/pdf`);
+                    if (!response.ok) {
+                      const err = await response.json().catch(() => ({ error: 'خطا در تولید PDF' }));
+                      throw new Error(err.error || 'خطا در تولید PDF');
+                    }
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = window.document.createElement('a');
+                    a.href = url;
+                    a.download = `${document.documentNumber}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
                   } catch (error) {
-                    alert('خطا در تولید PDF: ' + (error as Error).message);
+                    toast.error('خطا در تولید PDF', (error as Error).message);
+                  } finally {
+                    setIsPdfGenerating(false);
                   }
                 }}
-                className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                disabled={isPdfGenerating}
+                className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                📄 PDF
+                {isPdfGenerating ? <><Loader2 className="h-4 w-4 animate-spin" /> در حال تولید PDF...</> : <><FileText className="h-4 w-4" /> PDF</>}
               </button>
               <button
                 onClick={async () => {
                   try {
                     await generateDocumentExcel(document as any);
                   } catch (error) {
-                    alert('خطا در تولید Excel: ' + (error as Error).message);
+                    toast.error('خطا در تولید Excel', (error as Error).message);
                   }
                 }}
                 className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
               >
-                📊 Excel
+                <Sheet className="h-4 w-4" /> Excel
               </button>
               <button
                 onClick={() => {
@@ -176,7 +185,7 @@ export default function DocumentDetailPage() {
                 }}
                 className="rounded-lg bg-gray-600 px-4 py-2 text-white hover:bg-gray-700"
               >
-                🖨️ چاپ
+                <Printer className="h-4 w-4" /> چاپ
               </button>
             </div>
           </div>
@@ -185,6 +194,10 @@ export default function DocumentDetailPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumb items={[
+          { label: 'اسناد', href: '/documents' },
+          { label: document?.documentNumber || 'جزئیات سند' },
+        ]} />
         <div className="overflow-hidden rounded-lg bg-white shadow">
           <div className="p-8">
             {/* Header Info */}
@@ -217,8 +230,9 @@ export default function DocumentDetailPage() {
                 اطلاعات سند
               </h3>
               <div className="grid grid-cols-2 gap-4">
+                {ds.showDate && (
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl">📅</span>
+                  <Calendar className="h-6 w-6 text-gray-500" />
                   <div>
                     <p className="text-sm text-gray-500">تاریخ سند</p>
                     <p className="font-bold" style={{ color: '#2a2a2a' }}>
@@ -226,9 +240,10 @@ export default function DocumentDetailPage() {
                     </p>
                   </div>
                 </div>
-                {document.dueDate && (
+                )}
+                {ds.showDueDate && document.dueDate && (
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl">⏰</span>
+                    <Clock className="h-6 w-6 text-gray-500" />
                     <div>
                       <p className="text-sm text-gray-500">سررسید</p>
                       <p className="font-bold" style={{ color: '#2a2a2a' }}>
@@ -238,7 +253,7 @@ export default function DocumentDetailPage() {
                   </div>
                 )}
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl">🕐</span>
+                  <Clock className="h-6 w-6 text-gray-500" />
                   <div>
                     <p className="text-sm text-gray-500">تاریخ ایجاد</p>
                     <p className="font-bold" style={{ color: '#2a2a2a' }}>
@@ -246,8 +261,9 @@ export default function DocumentDetailPage() {
                     </p>
                   </div>
                 </div>
+                {ds.showOperator && (
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl">👤</span>
+                  <User className="h-6 w-6 text-gray-500" />
                   <div>
                     <p className="text-sm text-gray-500">ایجاد توسط</p>
                     <p className="font-bold" style={{ color: '#2a2a2a' }}>
@@ -255,6 +271,7 @@ export default function DocumentDetailPage() {
                     </p>
                   </div>
                 </div>
+                )}
               </div>
             </div>
 
@@ -264,24 +281,30 @@ export default function DocumentDetailPage() {
                 اطلاعات مشتری
               </h3>
               <div className="grid grid-cols-2 gap-4">
+                {ds.showCustomerName && (
                 <div>
                   <p className="text-sm text-gray-600">نام</p>
                   <p className="font-bold" style={{ color: '#2a2a2a' }}>
                     {document.customer.name}
                   </p>
                 </div>
+                )}
+                {ds.showCustomerCode && (
                 <div>
                   <p className="text-sm text-gray-600">کد مشتری</p>
                   <p className="font-bold" style={{ color: '#2a2a2a' }}>
                     {document.customer.code}
                   </p>
                 </div>
+                )}
+                {ds.showCustomerPhone && (
                 <div>
                   <p className="text-sm text-gray-600">شماره تماس</p>
                   <p className="font-bold" style={{ color: '#2a2a2a' }}>
                     {document.customer.phone}
                   </p>
                 </div>
+                )}
                 {document.customer.address && (
                   <div className="col-span-2">
                     <p className="text-sm text-gray-600">آدرس</p>
@@ -314,7 +337,7 @@ export default function DocumentDetailPage() {
                       <th className="border p-3 text-center" style={{ color: '#1a1a1a' }}>
                         واحد
                       </th>
-                      {document.documentType === 'TEMP_PROFORMA' && (
+                      {showInternal && ds.showPurchasePrice && (
                         <>
                           <th className="border p-3 text-right" style={{ color: '#1a1a1a' }}>
                             قیمت خرید
@@ -327,7 +350,7 @@ export default function DocumentDetailPage() {
                       <th className="border p-3 text-right" style={{ color: '#1a1a1a' }}>
                         قیمت فروش
                       </th>
-                      {document.documentType === 'TEMP_PROFORMA' && (
+                      {showInternal && ds.showProfit && (
                         <th className="border p-3 text-right" style={{ color: '#1a1a1a' }}>
                           سود
                         </th>
@@ -352,7 +375,7 @@ export default function DocumentDetailPage() {
                           </td>
                           <td className="border p-3" style={{ color: '#2a2a2a' }}>
                             <div className="font-bold">{item.productName}</div>
-                            {item.description && (
+                            {ds.showItemDescription && item.description && (
                               <div className="text-sm text-gray-600">{item.description}</div>
                             )}
                           </td>
@@ -362,7 +385,7 @@ export default function DocumentDetailPage() {
                           <td className="border p-3 text-center" style={{ color: '#2a2a2a' }}>
                             {item.unit}
                           </td>
-                          {document.documentType === 'TEMP_PROFORMA' && (
+                          {showInternal && ds.showPurchasePrice && (
                             <>
                               <td className="border p-3 text-right" style={{ color: '#2a2a2a' }}>
                                 {formatCurrency(item.purchasePrice)}
@@ -375,7 +398,7 @@ export default function DocumentDetailPage() {
                           <td className="border p-3 text-right" style={{ color: '#2a2a2a' }}>
                             {formatCurrency(item.sellPrice)}
                           </td>
-                          {document.documentType === 'TEMP_PROFORMA' && (
+                          {showInternal && ds.showProfit && (
                             <td className="border p-3 text-right text-green-600 font-bold">
                               {formatCurrency(profit)}
                             </td>
@@ -397,7 +420,7 @@ export default function DocumentDetailPage() {
                 محاسبات
               </h3>
               <div className="space-y-3">
-                {document.documentType === 'TEMP_PROFORMA' && (
+                {showInternal && ds.showPurchasePrice && (
                   <>
                     <div className="flex justify-between border-b pb-2">
                       <span className="font-bold" style={{ color: '#2a2a2a' }}>
@@ -407,13 +430,15 @@ export default function DocumentDetailPage() {
                         {formatCurrency(totalPurchase)}
                       </span>
                     </div>
+                  </>
+                )}
+                {showInternal && ds.showProfit && (
                     <div className="flex justify-between border-b pb-2">
                       <span className="font-bold text-green-600">جمع سود:</span>
                       <span className="font-bold text-green-600">
                         {formatCurrency(totalProfit)}
                       </span>
                     </div>
-                  </>
                 )}
                 <div className="flex justify-between border-b pb-2">
                   <span className="font-bold" style={{ color: '#2a2a2a' }}>
@@ -441,7 +466,7 @@ export default function DocumentDetailPage() {
             </div>
 
             {/* Notes */}
-            {document.notes && (
+            {ds.showNotes && document.notes && (
               <div className="mb-8 rounded-lg border bg-yellow-50 p-6">
                 <h3 className="mb-3 text-xl font-bold" style={{ color: '#1a1a1a' }}>
                   یادداشت‌ها
@@ -487,7 +512,7 @@ export default function DocumentDetailPage() {
             )}
 
             {/* Approval History */}
-            {document.approvals && document.approvals.length > 0 && (
+            {ds.showApprovals && document.approvals && document.approvals.length > 0 && (
               <div className="rounded-lg border bg-gray-50 p-6">
                 <h3 className="mb-4 text-xl font-bold" style={{ color: '#1a1a1a' }}>
                   تاریخچه تاییدیه‌ها
@@ -507,7 +532,7 @@ export default function DocumentDetailPage() {
                         </p>
                         {approval.comment && (
                           <p className="mt-2 text-sm" style={{ color: '#2a2a2a' }}>
-                            💬 {approval.comment}
+                            <MessageSquare className="inline h-4 w-4 ml-1" /> {approval.comment}
                           </p>
                         )}
                       </div>
@@ -528,6 +553,39 @@ export default function DocumentDetailPage() {
           </div>
         </div>
       </main>
+
+      {showConvertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900">تبدیل سند</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-700">
+              آیا مطمئن هستید که می‌خواهید این سند را به {nextType ? DOC_TYPES[nextType] : ''} تبدیل کنید؟
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowConvertModal(false)}
+                disabled={convertMutation.isPending}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!nextType) return;
+                  setShowConvertModal(false);
+                  convertMutation.mutate({ id, toType: nextType });
+                }}
+                disabled={convertMutation.isPending}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {convertMutation.isPending ? 'در حال انجام...' : 'تبدیل'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Print Styles */}
       <style jsx global>{`

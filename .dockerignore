@@ -4,11 +4,17 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Docker tar exports (don't send to build context)
+invoice-*.tar
+
 # Build output
 .next
 out
 dist
 build
+backups
+uploads
+playwright-report
 
 # Environment
 .env

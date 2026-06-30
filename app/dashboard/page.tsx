@@ -1,13 +1,13 @@
 'use client';
 
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { GlobalSearch } from '@/components/ui/global-search';
-import { NotificationBell } from '@/components/ui/notification-bell';
+import { PageSkeleton, DashboardSkeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { Users, FileText, Clock, Settings, CheckCircle, Database } from 'lucide-react';
 
 const DOC_TYPES: Record<string, string> = {
   TEMP_PROFORMA: 'پیش‌فاکتور موقت',
@@ -30,6 +30,9 @@ export default function DashboardPage() {
   
   // Fetch dashboard stats
   const { data: stats, isLoading: statsLoading } = trpc.stats.getDashboardStats.useQuery();
+  const { data: pendingContractorDocs } = trpc.contractorDoc.pendingCount.useQuery(undefined, {
+    enabled: !!session && (session.user.role === 'ADMIN' || session.user.role === 'MANAGER'),
+  });
 
   // عنوان چرخان در tab مرورگر
   useEffect(() => {
@@ -50,19 +53,18 @@ export default function DashboardPage() {
     };
   }, [session]);
 
-  console.log('Dashboard - Status:', status, 'Session:', session);
-
   if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-xl">در حال بارگذاری...</div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!session) {
-    console.log('No session found, redirecting to login');
     router.push('/login');
+    return null;
+  }
+
+  // Redirect contractors to their own dashboard
+  if (session.user.role === 'CONTRACTOR') {
+    router.push('/dashboard/contractor');
     return null;
   }
 
@@ -71,43 +73,27 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-900">
-              داشبورد - خوش آمدید {session.user.name}
-            </h1>
-            <div className="flex items-center gap-4">
-              <GlobalSearch />
-              <NotificationBell />
-              <ThemeToggle />
-              <div className="text-sm">
-                <p className="font-medium text-gray-900">{session.user.name}</p>
-                <p className="text-gray-500">{session.user.role}</p>
-              </div>
-              <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
-              >
-                خروج
-              </button>
-            </div>
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            داشبورد - خوش آمدید {session.user.name}
+          </h1>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumb items={[{ label: 'داشبورد' }]} />
         {/* آمار کلی */}
         {statsLoading ? (
-          <div className="mb-8 text-center text-gray-500">در حال بارگذاری آمار...</div>
+          <DashboardSkeleton />
         ) : stats ? (
-          <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 p-6 text-white shadow-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm opacity-90">مشتریان</p>
                   <p className="mt-2 text-3xl font-bold">{stats.summary.totalCustomers}</p>
                 </div>
-                <div className="text-4xl opacity-80">👥</div>
+                <Users className="h-10 w-10 opacity-80" />
               </div>
             </div>
 
@@ -117,7 +103,7 @@ export default function DashboardPage() {
                   <p className="text-sm opacity-90">اسناد</p>
                   <p className="mt-2 text-3xl font-bold">{stats.summary.totalDocuments}</p>
                 </div>
-                <div className="text-4xl opacity-80">📄</div>
+                <FileText className="h-10 w-10 opacity-80" />
               </div>
             </div>
 
@@ -127,7 +113,7 @@ export default function DashboardPage() {
                   <p className="text-sm opacity-90">در انتظار تایید</p>
                   <p className="mt-2 text-3xl font-bold">{stats.summary.pendingApprovals}</p>
                 </div>
-                <div className="text-4xl opacity-80">⏳</div>
+                <Clock className="h-10 w-10 opacity-80" />
               </div>
             </div>
 
@@ -138,9 +124,21 @@ export default function DashboardPage() {
                     <p className="text-sm opacity-90">کاربران</p>
                     <p className="mt-2 text-3xl font-bold">{stats.summary.totalUsers}</p>
                   </div>
-                  <div className="text-4xl opacity-80">⚙️</div>
+                  <Settings className="h-10 w-10 opacity-80" />
                 </div>
               </div>
+            )}
+
+            {(session.user.role === 'ADMIN' || session.user.role === 'MANAGER') && (
+              <Link href="/contractor-docs" className="rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm opacity-90">مستندات در انتظار</p>
+                    <p className="mt-2 text-3xl font-bold">{pendingContractorDocs || 0}</p>
+                  </div>
+                  <Clock className="h-10 w-10 opacity-80" />
+                </div>
+              </Link>
             )}
           </div>
         ) : null}
@@ -162,7 +160,7 @@ export default function DashboardPage() {
                   مدیریت اطلاعات مشتریان
                 </p>
               </div>
-              <div className="text-4xl">👥</div>
+              <Users className="h-10 w-10 text-blue-500" />
             </div>
           </Link>
 
@@ -180,7 +178,7 @@ export default function DashboardPage() {
                   مدیریت فاکتورها و اسناد
                 </p>
               </div>
-              <div className="text-4xl">📄</div>
+              <FileText className="h-10 w-10 text-green-500" />
             </div>
           </Link>
 
@@ -199,7 +197,7 @@ export default function DashboardPage() {
                     تایید یا رد اسناد
                   </p>
                 </div>
-                <div className="text-4xl">✅</div>
+                <CheckCircle className="h-10 w-10 text-green-500" />
               </div>
             </Link>
           )}
@@ -219,7 +217,7 @@ export default function DashboardPage() {
                     مدیریت کاربران سیستم
                   </p>
                 </div>
-                <div className="text-4xl">⚙️</div>
+                <Settings className="h-10 w-10 text-purple-500" />
               </div>
             </Link>
           )}
@@ -238,7 +236,7 @@ export default function DashboardPage() {
                   پشتیبان‌گیری{session.user.role === 'ADMIN' ? ' و بازیابی' : ''} داده‌ها
                 </p>
               </div>
-              <div className="text-4xl">💾</div>
+              <Database className="h-10 w-10 text-gray-500" />
             </div>
           </Link>
         </div>
