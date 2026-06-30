@@ -49,3 +49,26 @@ next-env.d.ts
 
 # SWC tarballs for Docker build (keep locally, don't commit)
 swc-linux-*.tgz
+
+# Large archive files — never commit
+*.tar
+*.tar.gz
+*.tgz
+node_modules_cache*
+
+# Build logs
+*.log
+build_local*
+
+# Playwright reports (generated, not source)
+playwright-report/
+
+# Backups
+backups/
+
+# Temporary files
+temp-*
+
+# PDF exports (generated, not source)
+*.pdf
+!docs/*.pdf
