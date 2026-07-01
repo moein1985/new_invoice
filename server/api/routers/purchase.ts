@@ -305,7 +305,7 @@ export const purchaseRouter = createTRPCRouter({
         supplierAddress: z.string().optional(),
         paymentMethod: z.string().optional(),
         paymentDays: z.number().int().min(0).optional().nullable(),
-        notes: z.string().optional(),
+        notes: z.string().optional().nullable(),
         items: z.array(
           z.object({
             purchaseItemId: z.string().uuid(),
@@ -313,7 +313,7 @@ export const purchaseRouter = createTRPCRouter({
             totalPrice: z.number().min(0),
             availability: z.enum(['AVAILABLE', 'UNAVAILABLE', 'PARTIAL']).default('AVAILABLE'),
             deliveryDays: z.number().int().min(0).optional().nullable(),
-            notes: z.string().optional(),
+            notes: z.string().optional().nullable(),
           })
         ).min(1, 'حداقل یک قلم الزامی است'),
         attachments: z.array(
