@@ -426,7 +426,12 @@ model PurchaseAudit {
   id                String   @id @default(uuid())
   purchaseRequestId String
   userId            String
-  action            String   // 'CREATED' | 'UPDATED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PURCHASED' | 'INQUIRY_ADDED' | 'INQUIRY_APPROVED' | 'DELETED'
+  action            String   // 'CREATED' | 'UPDATED' | 'SUBMITTED' | 
+  
+  
+  
+  
+  'APPROVED' | 'REJECTED' | 'PURCHASED' | 'INQUIRY_ADDED' | 'INQUIRY_APPROVED' | 'DELETED'
   changes           String?  // JSON string of changed fields
   createdAt         DateTime @default(now())
 
