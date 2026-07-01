@@ -181,7 +181,6 @@ export const documentRouter = createTRPCRouter({
           id: doc.id,
           documentType: doc.documentType,
           approvalStatus: doc.approvalStatus,
-          approvalOrder: doc.approvalOrder,
           customerName: doc.customer.name,
           totalAmount: doc.totalAmount,
           createdAt: doc.createdAt,

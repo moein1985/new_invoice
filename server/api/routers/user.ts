@@ -167,7 +167,7 @@ export const userRouter = createTRPCRouter({
         fullName?: string;
         email?: string;
         phone?: string;
-        role?: 'ADMIN' | 'MANAGER' | 'USER';
+        role?: 'ADMIN' | 'MANAGER' | 'USER' | 'CONTRACTOR';
         isActive?: boolean;
         password?: string;
       } = data;

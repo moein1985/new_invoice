@@ -127,7 +127,7 @@ export const generateDocumentPDFV2 = async (document: Document) => {
   
   addText(`تاریخ: ${formatDate(document.issueDate)}`, margin + 5, y + 7, { align: 'left' });
   if (document.dueDate) {
-    addText(`سررسید: ${formatDate(document.dueDate)}`, margin + 5, y + 14, { align: 'left' });
+    addText(`سررسید: ${formatDate(document.dueDate!)}`, margin + 5, y + 14, { align: 'left' });
   }
   if (document.projectName) {
     addText(`پروژه: ${document.projectName}`, margin + 5, y + 21, { align: 'left' });
@@ -250,7 +250,7 @@ export const generateDocumentPDFV2 = async (document: Document) => {
     y += 7;
     
     // Split long text
-    const splitNotes = doc.splitTextToSize(document.notes, contentWidth - 10);
+    const splitNotes = doc.splitTextToSize(document.notes!, contentWidth - 10);
     splitNotes.forEach((line: string) => {
       if (y > pageHeight - 30) {
         doc.addPage();

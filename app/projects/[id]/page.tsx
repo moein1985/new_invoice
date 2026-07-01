@@ -303,6 +303,29 @@ export default function ProjectDetailPage() {
               </>
             );
           })()}
+
+          {summary.purchases?.map((p: any) => (
+            <div key={p.status} className="rounded-lg border border-gray-200 bg-white p-3">
+              <p className="text-xs text-gray-500">
+                {p.status === 'DRAFT' ? 'خرید پیش‌نویس' :
+                 p.status === 'PENDING_INQUIRY' ? 'در انتظار استعلام' :
+                 p.status === 'INQUIRED' ? 'استعلام‌شده' :
+                 p.status === 'APPROVED' ? 'خرید تاییدشده' :
+                 p.status === 'REJECTED' ? 'خرید ردشده' :
+                 p.status === 'PURCHASED' ? 'خریداری‌شده' : p.status}
+              </p>
+              <p className="text-lg font-bold text-gray-900">{p._count._all}</p>
+            </div>
+          ))}
+          {summary.totalPurchaseAmount > 0 && (
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+              <p className="text-xs text-indigo-500">مبلغ کل خرید</p>
+              <p className="text-lg font-bold text-indigo-900">
+                {Number(summary.totalPurchaseAmount).toLocaleString('fa-IR')}
+                <span className="text-xs font-normal mr-1">تومان</span>
+              </p>
+            </div>
+          )}
         </div>
       )}
 

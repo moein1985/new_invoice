@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import { trpc } from '@/lib/trpc';
@@ -57,36 +57,29 @@ export default function NewInquiryPage() {
 
   const { data: request, isLoading } = trpc.purchase.getById.useQuery(
     { id },
-    {
-      enabled: !!session && !!id,
-      onSuccess: (data: any) => {
-        if (inquiryItems.length === 0 && data.items.length > 0) {
-          setInquiryItems(
-            data.items.map((item: any) => ({
-              purchaseItemId: item.id,
-              productName: item.productName,
-              quantity: item.quantity,
-              unit: item.unit,
-              unitPrice: 0,
-              totalPrice: 0,
-              availability: 'AVAILABLE' as const,
-              deliveryDays: null,
-              notes: '',
-            }))
-          );
-        }
-      },
-    }
+    { enabled: !!session && !!id }
   );
 
+  useEffect(() => {
+    if (request && inquiryItems.length === 0 && request.items.length > 0) {
+      setInquiryItems(
+        request.items.map((item: any) => ({
+          purchaseItemId: item.id,
+          productName: item.productName,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: 0,
+          totalPrice: 0,
+          availability: 'AVAILABLE' as const,
+          deliveryDays: null,
+          notes: '',
+        }))
+      );
+    }
+  }, [request, inquiryItems.length]);
+
   const addInquiryMutation = trpc.purchase.addInquiry.useMutation({
-    onSuccess: async (data) => {
-      // Upload attachments for this inquiry
-      if (attachments.length > 0) {
-        // We need to save attachments via a separate call since tRPC doesn't handle files
-        // The attachments are already uploaded, we just need to link them
-        // For now, we'll handle this through a direct prisma call in the mutation
-      }
+    onSuccess: async () => {
       toast.success('استعلام با موفقیت ثبت شد');
       router.push(`/purchases/${id}`);
     },
@@ -169,6 +162,13 @@ export default function NewInquiryPage() {
         availability: i.availability,
         deliveryDays: i.deliveryDays,
         notes: i.notes || undefined,
+      })),
+      attachments: attachments.map((a) => ({
+        fileName: a.fileName,
+        filePath: a.filePath,
+        fileType: a.fileType,
+        fileSize: a.fileSize,
+        type: a.type,
       })),
     });
   };
@@ -401,7 +401,7 @@ export default function NewInquiryPage() {
           </button>
           <LoadingButton
             onClick={handleSubmit}
-            loading={addInquiryMutation.isPending || submitting}
+            isLoading={addInquiryMutation.isPending || submitting}
             className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
             ثبت استعلام

@@ -17,6 +17,8 @@ export const purchaseRouter = createTRPCRouter({
         priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional().nullable(),
         search: z.string().optional().nullable(),
         projectId: z.string().uuid().optional().nullable(),
+        dateFrom: z.string().optional().nullable(),
+        dateTo: z.string().optional().nullable(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -43,6 +45,12 @@ export const purchaseRouter = createTRPCRouter({
         ];
       }
 
+      if (input.dateFrom || input.dateTo) {
+        where.createdAt = {};
+        if (input.dateFrom) where.createdAt.gte = new Date(input.dateFrom);
+        if (input.dateTo) where.createdAt.lte = new Date(input.dateTo);
+      }
+
       const [requests, total] = await Promise.all([
         ctx.prisma.purchaseRequest.findMany({
           where,
@@ -54,6 +62,7 @@ export const purchaseRouter = createTRPCRouter({
             createdBy: { select: { id: true, fullName: true } },
             assignedTo: { select: { id: true, fullName: true } },
             _count: { select: { items: true, inquiries: true } },
+            approvedInquiry: { select: { totalPrice: true, supplierName: true } },
           },
         }),
         ctx.prisma.purchaseRequest.count({ where }),
@@ -196,6 +205,14 @@ export const purchaseRouter = createTRPCRouter({
         });
       }
 
+      await ctx.prisma.purchaseAudit.create({
+        data: {
+          purchaseRequestId: request.id,
+          userId,
+          action: 'CREATED',
+        },
+      });
+
       return request;
     }),
 
@@ -258,6 +275,15 @@ export const purchaseRouter = createTRPCRouter({
         });
       }
 
+      await ctx.prisma.purchaseAudit.create({
+        data: {
+          purchaseRequestId: id,
+          userId: ctx.session.user.id,
+          action: 'UPDATED',
+          changes: JSON.stringify(input),
+        },
+      });
+
       return updated;
     }),
 
@@ -282,6 +308,15 @@ export const purchaseRouter = createTRPCRouter({
             notes: z.string().optional(),
           })
         ).min(1, 'حداقل یک قلم الزامی است'),
+        attachments: z.array(
+          z.object({
+            fileName: z.string(),
+            filePath: z.string(),
+            fileType: z.string(),
+            fileSize: z.number(),
+            type: z.enum(['IMAGE', 'PROFORMA', 'OTHER']),
+          })
+        ).optional().default([]),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -328,10 +363,27 @@ export const purchaseRouter = createTRPCRouter({
               notes: item.notes,
             })),
           },
+          attachments: input.attachments.length > 0 ? {
+            create: input.attachments.map((att) => ({
+              fileName: att.fileName,
+              filePath: att.filePath,
+              fileType: att.fileType,
+              fileSize: att.fileSize,
+              type: att.type,
+            })),
+          } : undefined,
         },
         include: {
           items: true,
           attachments: true,
+        },
+      });
+
+      await ctx.prisma.purchaseAudit.create({
+        data: {
+          purchaseRequestId: input.purchaseRequestId,
+          userId,
+          action: 'INQUIRY_ADDED',
         },
       });
 
@@ -374,6 +426,14 @@ export const purchaseRouter = createTRPCRouter({
           title: 'استعلام‌ها ارسال شد',
           message: `استعلام‌های درخواست "${request.title}" برای بررسی ارسال شد`,
           link: `/purchases/${input.id}`,
+        },
+      });
+
+      await ctx.prisma.purchaseAudit.create({
+        data: {
+          purchaseRequestId: input.id,
+          userId,
+          action: 'SUBMITTED',
         },
       });
 
@@ -426,6 +486,14 @@ export const purchaseRouter = createTRPCRouter({
         });
       }
 
+      await ctx.prisma.purchaseAudit.create({
+        data: {
+          purchaseRequestId: input.purchaseRequestId,
+          userId: ctx.session.user.id,
+          action: 'INQUIRY_APPROVED',
+        },
+      });
+
       return updated;
     }),
 
@@ -467,6 +535,15 @@ export const purchaseRouter = createTRPCRouter({
         });
       }
 
+      await ctx.prisma.purchaseAudit.create({
+        data: {
+          purchaseRequestId: input.id,
+          userId: ctx.session.user.id,
+          action: 'REJECTED',
+          changes: JSON.stringify({ reason: input.reason }),
+        },
+      });
+
       return updated;
     }),
 
@@ -486,10 +563,20 @@ export const purchaseRouter = createTRPCRouter({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'فقط درخواست‌های تایید‌شده قابل علامت‌گذاری هستند' });
       }
 
-      return ctx.prisma.purchaseRequest.update({
+      const updated = await ctx.prisma.purchaseRequest.update({
         where: { id: input.id },
         data: { status: 'PURCHASED' },
       });
+
+      await ctx.prisma.purchaseAudit.create({
+        data: {
+          purchaseRequestId: input.id,
+          userId: ctx.session.user.id,
+          action: 'PURCHASED',
+        },
+      });
+
+      return updated;
     }),
 
   // Delete purchase request
@@ -508,8 +595,69 @@ export const purchaseRouter = createTRPCRouter({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'امکان حذف درخواست خریداری‌شده وجود ندارد' });
       }
 
+      await ctx.prisma.purchaseAudit.create({
+        data: {
+          purchaseRequestId: input.id,
+          userId: ctx.session.user.id,
+          action: 'DELETED',
+        },
+      });
+
       await ctx.prisma.purchaseRequest.delete({ where: { id: input.id } });
       return { success: true };
+    }),
+
+  // Reject a specific inquiry (ADMIN/MANAGER)
+  rejectInquiry: managerProcedure
+    .input(z.object({
+      inquiryId: z.string().uuid(),
+      reason: z.string().optional().nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const inquiry = await ctx.prisma.purchaseInquiry.findUnique({
+        where: { id: input.inquiryId },
+        include: { purchaseRequest: { select: { id: true, status: true } } },
+      });
+      if (!inquiry) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'استعلام یافت نشد' });
+      }
+      if (inquiry.purchaseRequest.status === 'APPROVED' || inquiry.purchaseRequest.status === 'PURCHASED') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'درخواست تاییدشده است' });
+      }
+
+      await ctx.prisma.purchaseInquiry.delete({ where: { id: input.inquiryId } });
+
+      await ctx.prisma.purchaseAudit.create({
+        data: {
+          purchaseRequestId: inquiry.purchaseRequestId,
+          userId: ctx.session.user.id,
+          action: 'INQUIRY_REJECTED',
+          changes: JSON.stringify({ inquiryId: input.inquiryId, reason: input.reason }),
+        },
+      });
+
+      return { success: true };
+    }),
+
+  // List audit log for a purchase request
+  listAudit: protectedProcedure
+    .input(z.object({ purchaseRequestId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const role = ctx.session.user.role;
+      if (role !== 'ADMIN' && role !== 'MANAGER') {
+        const req = await ctx.prisma.purchaseRequest.findUnique({
+          where: { id: input.purchaseRequestId },
+          select: { createdById: true, assignedToId: true },
+        });
+        if (req?.createdById !== ctx.session.user.id && req?.assignedToId !== ctx.session.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN' });
+        }
+      }
+      return ctx.prisma.purchaseAudit.findMany({
+        where: { purchaseRequestId: input.purchaseRequestId },
+        include: { user: { select: { fullName: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
     }),
 
   // Pending count for badge

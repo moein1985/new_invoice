@@ -179,7 +179,7 @@ export default function EditPurchasePage() {
           </button>
           <LoadingButton
             onClick={handleSubmit}
-            loading={updateMutation.isLoading}
+            isLoading={updateMutation.isPending}
             className="rounded-lg bg-blue-600 px-6 py-2 text-sm text-white hover:bg-blue-700 transition-colors"
           >
             ذخیره تغییرات

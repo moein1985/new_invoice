@@ -10,6 +10,7 @@ import { Search, Plus, ShoppingCart, Filter, Pencil, Trash2 } from 'lucide-react
 import { Pagination } from '@/components/ui/pagination';
 import { PageSkeleton, TableSkeleton } from '@/components/ui/skeleton';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { JalaliDatePicker } from '@/components/ui/jalali-date-picker';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'پیش‌نویس',
@@ -53,6 +54,8 @@ export default function PurchasesPage() {
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const role = session?.user?.role;
   const isManager = role === 'ADMIN' || role === 'MANAGER';
@@ -64,6 +67,8 @@ export default function PurchasesPage() {
       search: search || undefined,
       status: (statusFilter || undefined) as any,
       priority: (priorityFilter || undefined) as any,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
     },
     { enabled: !!session }
   );
@@ -139,6 +144,11 @@ export default function PurchasesPage() {
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
+          <div className="flex items-center gap-2">
+            <JalaliDatePicker value={dateFrom} onChange={(v) => { setDateFrom(v); setPage(1); }} placeholder="از تاریخ" className="w-36" />
+            <span className="text-gray-400">—</span>
+            <JalaliDatePicker value={dateTo} onChange={(v) => { setDateTo(v); setPage(1); }} placeholder="تا تاریخ" className="w-36" />
+          </div>
         </div>
       </div>
 
@@ -165,7 +175,8 @@ export default function PurchasesPage() {
                   <th className="px-4 py-3 text-right font-medium text-gray-600">مسئول</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600">تاریخ</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600">تعداد قلم</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600">استعلام</th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-600">استعلام</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-600">مبلغ تاییدشده</th>
                   {isManager && <th className="px-4 py-3 text-right font-medium text-gray-600">عملیات</th>}
                 </tr>
               </thead>
@@ -199,7 +210,22 @@ export default function PurchasesPage() {
                       {moment(req.createdAt).format('jYYYY/jMM/jDD')}
                     </td>
                     <td className="px-4 py-3 text-center text-gray-600">{req._count.items}</td>
-                    <td className="px-4 py-3 text-center text-gray-600">{req._count.inquiries}</td>
+                    <td className="px-4 py-3 text-center">
+                      {req._count.inquiries > 0 ? (
+                        <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                          {req._count.inquiries}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">
+                      {req.approvedInquiry ? (
+                        <span className="text-gray-900">{new Intl.NumberFormat('fa-IR').format(Math.round(req.approvedInquiry.totalPrice))} تومان</span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
                     {isManager && (
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

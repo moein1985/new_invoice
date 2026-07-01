@@ -245,7 +245,7 @@ export const projectRouter = createTRPCRouter({
         }
       }
 
-      const [workReports, contractorDocs] = await Promise.all([
+      const [workReports, contractorDocs, purchases] = await Promise.all([
         ctx.prisma.workReport.groupBy({
           by: ['approvalStatus'],
           where: { projectId: input.id },
@@ -258,8 +258,22 @@ export const projectRouter = createTRPCRouter({
           _sum: { totalAmount: true },
           _count: { _all: true },
         }),
+        ctx.prisma.purchaseRequest.groupBy({
+          by: ['status'],
+          where: { projectId: input.id },
+          _count: { _all: true },
+        }),
       ]);
 
-      return { workReports, contractorDocs };
+      const approvedPurchases = await ctx.prisma.purchaseRequest.findMany({
+        where: { projectId: input.id, status: { in: ['APPROVED', 'PURCHASED'] } },
+        select: { approvedInquiry: { select: { totalPrice: true } } },
+      });
+      const totalPurchaseAmount = approvedPurchases.reduce(
+        (sum, p) => sum + (p.approvedInquiry?.totalPrice || 0),
+        0
+      );
+
+      return { workReports, contractorDocs, purchases, totalPurchaseAmount };
     }),
 });

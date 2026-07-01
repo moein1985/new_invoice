@@ -99,9 +99,9 @@ export function SipProvider({ children }: { children: ReactNode }) {
         const userAgent = new UserAgent({
           uri,
           transportOptions,
-          authorizationUsername: sipSettings.sipUsername,
-          authorizationPassword: sipSettings.sipPassword,
-          displayName: sipSettings.sipExtension || sipSettings.sipUsername,
+          authorizationUsername: sipSettings.sipUsername ?? undefined,
+          authorizationPassword: sipSettings.sipPassword ?? undefined,
+          displayName: sipSettings.sipExtension || sipSettings.sipUsername || undefined,
           noAnswerTimeout: 60,
           delegate: {
             onInvite: (invitation: any) => {

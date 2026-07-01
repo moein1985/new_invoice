@@ -38,6 +38,10 @@ function makeCtx(role: Role = 'ADMIN', userId = 'u-admin') {
         create: jest.fn(),
         delete: jest.fn(),
       },
+      purchaseAudit: {
+        create: jest.fn(),
+        findMany: jest.fn(),
+      },
       notification: {
         create: jest.fn(),
       },
@@ -104,6 +108,7 @@ describe('purchaseRouter.create', () => {
     ctx.prisma.purchaseRequest.findFirst.mockResolvedValue({ requestNumber: 'PR-1405-000009' });
     ctx.prisma.purchaseRequest.create.mockResolvedValue({ id: 'pr-1', title: 'خرید کابل' });
     ctx.prisma.notification.create.mockResolvedValue({ id: 'n1' });
+    ctx.prisma.purchaseAudit.create.mockResolvedValue({ id: 'a1' });
 
     const caller = createCaller(ctx);
     await caller.create({
@@ -153,6 +158,7 @@ describe('purchaseRouter.submit', () => {
     });
     ctx.prisma.purchaseRequest.update.mockResolvedValue({ id: UUIDS.request, status: 'INQUIRED' });
     ctx.prisma.notification.create.mockResolvedValue({ id: 'n1' });
+    ctx.prisma.purchaseAudit.create.mockResolvedValue({ id: 'a1' });
 
     const caller = createCaller(ctx);
     const result = await caller.submit({ id: UUIDS.request });
@@ -182,6 +188,7 @@ describe('purchaseRouter.approveInquiry', () => {
       status: 'APPROVED',
       approvedInquiryId: UUIDS.inquiry,
     });
+    ctx.prisma.purchaseAudit.create.mockResolvedValue({ id: 'a1' });
 
     const caller = createCaller(ctx);
     const result = await caller.approveInquiry({ purchaseRequestId: UUIDS.request, inquiryId: UUIDS.inquiry });

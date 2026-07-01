@@ -13,7 +13,7 @@ import { Breadcrumb } from '@/components/ui/breadcrumb';
 import {
   ShoppingCart, Plus, CheckCircle, XCircle, Send, Package,
   Phone, MapPin, CreditCard, Clock, FileText, Image, Play, Pause,
-  Trash2, Download, Eye,
+  Trash2, Download, TrendingDown,
 } from 'lucide-react';
 import { useRef } from 'react';
 
@@ -123,6 +123,19 @@ export default function PurchaseDetailPage() {
     onError: (err) => toast.error(err.message),
   });
 
+  const rejectInquiryMutation = trpc.purchase.rejectInquiry.useMutation({
+    onSuccess: () => {
+      toast.success('استعلام رد شد');
+      utils.purchase.getById.invalidate({ id });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const { data: auditLog } = trpc.purchase.listAudit.useQuery(
+    { purchaseRequestId: id },
+    { enabled: !!id && (role === 'ADMIN' || role === 'MANAGER') }
+  );
+
   if (authStatus === 'loading' || isLoading) return <PageSkeleton />;
   if (!session) { router.push('/login'); return null; }
   if (!request) {
@@ -133,7 +146,6 @@ export default function PurchaseDetailPage() {
 
   const canAddInquiry =
     (request.status === 'PENDING_INQUIRY' || request.status === 'INQUIRED' || request.status === 'DRAFT') &&
-    request.status !== 'APPROVED' && request.status !== 'PURCHASED' &&
     (isManager || request.assignedToId === userId);
 
   const canSubmit =
@@ -150,6 +162,11 @@ export default function PurchaseDetailPage() {
   const canReject =
     isManager &&
     request.status !== 'APPROVED' && request.status !== 'PURCHASED' && request.status !== 'REJECTED';
+
+  const validInquiries = request.inquiries.filter((inq: any) => inq.totalPrice > 0);
+  const cheapestInquiryId = validInquiries.length > 0
+    ? validInquiries.reduce((min: any, inq: any) => inq.totalPrice < min.totalPrice ? inq : min).id
+    : null;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 space-y-6">
@@ -189,7 +206,7 @@ export default function PurchaseDetailPage() {
           {canSubmit && (
             <LoadingButton
               onClick={() => submitMutation.mutate({ id })}
-              loading={submitMutation.isPending}
+              isLoading={submitMutation.isPending}
               className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
             >
               <Send size={16} />
@@ -208,7 +225,7 @@ export default function PurchaseDetailPage() {
           {isManager && request.status === 'APPROVED' && (
             <LoadingButton
               onClick={() => purchasedMutation.mutate({ id })}
-              loading={purchasedMutation.isPending}
+              isLoading={purchasedMutation.isPending}
               className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
             >
               <Package size={16} />
@@ -223,6 +240,14 @@ export default function PurchaseDetailPage() {
               <Trash2 size={16} />
             </button>
           )}
+          <a
+            href={`/api/purchases/${id}/pdf`}
+            target="_blank"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Download size={16} />
+            PDF
+          </a>
         </div>
       </div>
 
@@ -340,6 +365,7 @@ export default function PurchaseDetailPage() {
           <div className="grid gap-4">
             {request.inquiries.map((inq: any) => {
               const isApproved = request.approvedInquiryId === inq.id;
+              const isCheapest = inq.id === cheapestInquiryId && inq.totalPrice > 0;
               return (
                 <div
                   key={inq.id}
@@ -359,6 +385,12 @@ export default function PurchaseDetailPage() {
                           تایید‌شده
                         </span>
                       )}
+                      {isCheapest && !isApproved && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          <TrendingDown size={12} />
+                          ارزان‌ترین
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-gray-900">
@@ -367,12 +399,25 @@ export default function PurchaseDetailPage() {
                       {canApprove && !request.approvedInquiryId && (
                         <LoadingButton
                           onClick={() => approveMutation.mutate({ purchaseRequestId: id, inquiryId: inq.id })}
-                          loading={approveMutation.isPending}
+                          isLoading={approveMutation.isPending}
                           className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
                         >
                           <CheckCircle size={14} />
                           تایید
                         </LoadingButton>
+                      )}
+                      {canApprove && !request.approvedInquiryId && (
+                        <button
+                          onClick={() => {
+                            if (confirm('این استعلام رد شود؟')) {
+                              rejectInquiryMutation.mutate({ inquiryId: inq.id });
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-200"
+                        >
+                          <XCircle size={14} />
+                          رد
+                        </button>
                       )}
                       {request.status !== 'APPROVED' && request.status !== 'PURCHASED' && (
                         <button
@@ -460,6 +505,95 @@ export default function PurchaseDetailPage() {
         )}
       </div>
 
+      {/* Comparison Table */}
+      {validInquiries.length > 1 && (
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+            <h3 className="text-sm font-medium text-gray-700">مقایسه استعلام‌ها</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/50">
+                  <th className="px-4 py-2 text-right text-gray-600 font-medium">محصول</th>
+                  {validInquiries.map((inq: any) => (
+                    <th key={inq.id} className="px-4 py-2 text-right text-gray-600 font-medium">
+                      {inq.supplierName}
+                      {inq.id === cheapestInquiryId && <span className="mr-1 text-emerald-600">★</span>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {request.items.map((item: any) => (
+                  <tr key={item.id} className="border-b border-gray-100">
+                    <td className="px-4 py-2 font-medium">{item.productName}</td>
+                    {validInquiries.map((inq: any) => {
+                      const inqItem = inq.items.find((ii: any) => ii.purchaseItemId === item.id);
+                      return (
+                        <td key={inq.id} className="px-4 py-2">
+                          {inqItem ? `${formatPrice(inqItem.unitPrice)} تومان` : '—'}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-gray-200 bg-gray-50/50 font-bold">
+                  <td className="px-4 py-2">جمع کل</td>
+                  {validInquiries.map((inq: any) => (
+                    <td key={inq.id} className="px-4 py-2">
+                      {formatPrice(inq.totalPrice)} تومان
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {(() => {
+            if (validInquiries.length < 2) return null;
+            const max = Math.max(...validInquiries.map((inq: any) => inq.totalPrice));
+            const min = Math.min(...validInquiries.map((inq: any) => inq.totalPrice));
+            const savings = max - min;
+            const savingsPercent = ((savings / max) * 100).toFixed(1);
+            return (
+              <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2 text-sm">
+                <span className="text-gray-500">صرفه‌جویی با انتخاب ارزان‌ترین:</span>
+                <span className="font-bold text-emerald-600">
+                  {formatPrice(savings)} تومان ({savingsPercent}٪)
+                </span>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Audit Log */}
+      {isManager && auditLog && auditLog.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">تاریخچه تغییرات</h3>
+          <div className="space-y-2">
+            {auditLog.map((log: any) => (
+              <div key={log.id} className="flex items-center gap-3 text-sm">
+                <span className="text-gray-400">{moment(log.createdAt).format('jYYYY/jMM/jDD - HH:mm')}</span>
+                <span className="font-medium text-gray-700">{log.user.fullName}</span>
+                <span className="text-gray-500">
+                  {log.action === 'CREATED' ? 'درخواست را ایجاد کرد' :
+                   log.action === 'UPDATED' ? 'درخواست را ویرایش کرد' :
+                   log.action === 'SUBMITTED' ? 'برای تایید ارسال کرد' :
+                   log.action === 'INQUIRY_ADDED' ? 'استعلام جدید ثبت کرد' :
+                   log.action === 'INQUIRY_APPROVED' ? 'استعلام را تایید کرد' :
+                   log.action === 'INQUIRY_REJECTED' ? 'استعلام را رد کرد' :
+                   log.action === 'REJECTED' ? 'درخواست را رد کرد' :
+                   log.action === 'PURCHASED' ? 'خریداری شد' :
+                   log.action === 'DELETED' ? 'حذف کرد' :
+                   log.action}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Reject Modal */}
       {showRejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowRejectModal(false)}>
@@ -481,7 +615,7 @@ export default function PurchaseDetailPage() {
               </button>
               <LoadingButton
                 onClick={() => rejectMutation.mutate({ id, reason: rejectReason })}
-                loading={rejectMutation.isPending}
+                isLoading={rejectMutation.isPending}
                 disabled={!rejectReason.trim()}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
@@ -507,7 +641,7 @@ export default function PurchaseDetailPage() {
               </button>
               <LoadingButton
                 onClick={() => deleteMutation.mutate({ id })}
-                loading={deleteMutation.isPending}
+                isLoading={deleteMutation.isPending}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
               >
                 حذف

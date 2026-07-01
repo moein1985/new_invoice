@@ -53,6 +53,7 @@ model User {
   contacts                 Contact[]
   contractorDocs           ContractorDoc[]
   workReportAudits         WorkReportAudit[]
+  purchaseAudits           PurchaseAudit[]
   
   @@map("users")
 }
@@ -497,6 +498,7 @@ model PurchaseRequest {
   items             PurchaseItem[]
   inquiries         PurchaseInquiry[]
   approvedInquiry   PurchaseInquiry? @relation("ApprovedInquiry", fields: [approvedInquiryId], references: [id])
+  audits            PurchaseAudit[]
 
   @@index([status])
   @@index([createdById])
@@ -585,6 +587,21 @@ model InquiryAttachment {
   inquiry     PurchaseInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
 
   @@map("inquiry_attachments")
+}
+
+model PurchaseAudit {
+  id                String   @id @default(uuid())
+  purchaseRequestId String
+  userId            String
+  action            String   // 'CREATED' | 'UPDATED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PURCHASED' | 'INQUIRY_ADDED' | 'INQUIRY_APPROVED' | 'INQUIRY_REJECTED' | 'DELETED'
+  changes           String?  // JSON string of changed fields
+  createdAt         DateTime @default(now())
+
+  purchaseRequest   PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  user              User            @relation(fields: [userId], references: [id])
+
+  @@index([purchaseRequestId])
+  @@map("purchase_audits")
 }
 
 enum PurchaseStatus {
