@@ -38,7 +38,7 @@ describe('userRouter.list', () => {
     const ctx = makeCtx('USER', UUIDS.user);
     const caller = createCaller(ctx);
 
-    await expect(caller.list({ page: 1, limit: 10 })).rejects.toThrow('فقط مدیران سیستم به این بخش دسترسی دارند');
+    await expect(caller.list({ page: 1, limit: 10 })).rejects.toThrow('فقط مدیران به این بخش دسترسی دارند');
   });
 
   it('returns paginated users with search filters for admin', async () => {

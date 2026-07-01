@@ -30,6 +30,7 @@ function makeProjectCtx(role: 'ADMIN' | 'MANAGER' | 'USER' | 'CONTRACTOR' = 'ADM
       user: { findMany: jest.fn() },
       workReport: { groupBy: jest.fn() },
       contractorDoc: { groupBy: jest.fn() },
+      purchaseRequest: { groupBy: jest.fn(), findMany: jest.fn() },
     },
   } as any;
 }
@@ -94,6 +95,8 @@ describe('Phase 3 — 3.2: project.getSummary', () => {
     ctx.prisma.contractorDoc.groupBy.mockResolvedValue([
       { approvalStatus: 'PENDING', _sum: { totalAmount: 2000 }, _count: { _all: 1 } },
     ]);
+    ctx.prisma.purchaseRequest.groupBy.mockResolvedValue([]);
+    ctx.prisma.purchaseRequest.findMany.mockResolvedValue([]);
 
     const caller = createProjectCaller(ctx);
     const result = await caller.getSummary({ id: UUIDS.project });
@@ -113,6 +116,8 @@ describe('Phase 3 — 3.2: project.getSummary', () => {
     ctx.prisma.contractorDoc.groupBy.mockResolvedValue([
       { approvalStatus: 'APPROVED', _sum: { totalAmount: 8000 }, _count: { _all: 3 } },
     ]);
+    ctx.prisma.purchaseRequest.groupBy.mockResolvedValue([]);
+    ctx.prisma.purchaseRequest.findMany.mockResolvedValue([]);
 
     const caller = createProjectCaller(ctx);
     const result = await caller.getSummary({ id: UUIDS.project });

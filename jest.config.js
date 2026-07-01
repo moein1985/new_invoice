@@ -11,7 +11,9 @@ const customJestConfig = {
   testEnvironment: 'node',
   moduleNameMapper: {
     '^@/app/api/auth/\[\.\.\.nextauth\]/auth-options$': '<rootDir>/__tests__/mocks/auth-options.ts',
+    '^@/lib/services/purchase-pdf$': '<rootDir>/__tests__/mocks/purchase-pdf.ts',
     '^@/(.*)$': '<rootDir>/$1',
+    '^\\./lib/services/purchase-pdf$': '<rootDir>/__tests__/mocks/purchase-pdf.ts',
     '^superjson$': '<rootDir>/__tests__/mocks/superjson.ts',
     '^\\./server/(.*)$': '<rootDir>/server/$1',
     '^\\./app/api/auth/\\[\\.\\.\\.nextauth\\]/auth-options$': '<rootDir>/__tests__/mocks/auth-options.ts',
@@ -29,6 +31,7 @@ const customJestConfig = {
     '/node_modules/',
     '/e2e/',
     '/.next/',
+    '/__tests__/mocks/',
   ],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',

@@ -457,6 +457,14 @@ export const purchaseRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'درخواست خرید یافت نشد' });
       }
 
+      if (request.status === 'APPROVED' || request.status === 'PURCHASED') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'درخواست قبلاً تایید شده است' });
+      }
+
+      if (request.status !== 'INQUIRED') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'استعلام‌ها باید ابتدا ارسال شوند' });
+      }
+
       const inquiry = await ctx.prisma.purchaseInquiry.findUnique({
         where: { id: input.inquiryId },
       });
@@ -512,6 +520,14 @@ export const purchaseRouter = createTRPCRouter({
 
       if (!request) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'درخواست خرید یافت نشد' });
+      }
+
+      if (request.status === 'PURCHASED') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'امکان رد درخواست خریداری‌شده وجود ندارد' });
+      }
+
+      if (request.status === 'REJECTED') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'درخواست قبلاً رد شده است' });
       }
 
       const updated = await ctx.prisma.purchaseRequest.update({

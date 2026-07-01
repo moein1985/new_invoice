@@ -1,16 +1,17 @@
-// @ts-nocheck
 import { test, expect } from '@playwright/test';
 
 test.describe('Documents List', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@test.com');
+    await page.waitForSelector('input[name="username"]', { timeout: 15000 });
+    await page.fill('input[name="username"]', 'admin');
     await page.fill('input[name="password"]', 'admin123');
     await page.click('button[type="submit"]');
-    await expect(page).toHaveURL('/dashboard');
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
+    await page.waitForTimeout(1000);
 
     await page.goto('/documents');
-    await expect(page.locator('h1:has-text("اسناد")')).toBeVisible();
+    await expect(page.locator('h1').filter({ hasText: 'اسناد' })).toBeVisible({ timeout: 15000 });
   });
 
   test('shows documents filters and supports search/url sync', async ({ page }) => {
