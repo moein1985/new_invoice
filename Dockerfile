@@ -11,7 +11,7 @@ RUN sh -c 'attempt=1; until [ "$attempt" -gt 5 ]; do apk add --no-cache openssl 
 # Use pre-cached node_modules (offline build — no npm ci needed)
 COPY node_modules_cache.tar.gz /tmp/
 RUN tar xzf /tmp/node_modules_cache.tar.gz -C /app && rm /tmp/node_modules_cache.tar.gz \
-    && chmod -R +x node_modules/.bin
+    && chmod -R +x node_modules/.bin 2>/dev/null || true
 
 # Pre-generate Prisma client with engines
 COPY prisma ./prisma
