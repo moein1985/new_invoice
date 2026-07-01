@@ -90,6 +90,10 @@ export default function NewPurchasePage() {
   // Voice recording functions
   const startRecording = async () => {
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast.error('ضبط صوت در محیط HTTP پشتیبانی نمی‌شود. به HTTPS یا localhost متصل شوید');
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;

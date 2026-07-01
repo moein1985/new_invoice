@@ -149,7 +149,7 @@ export default function PurchaseDetailPage() {
     (isManager || request.assignedToId === userId);
 
   const canSubmit =
-    role === 'USER' &&
+    (role === 'USER' || isManager) &&
     request.assignedToId === userId &&
     request.status === 'PENDING_INQUIRY' &&
     request.inquiries.length > 0;

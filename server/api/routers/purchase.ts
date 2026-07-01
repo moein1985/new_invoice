@@ -205,13 +205,17 @@ export const purchaseRouter = createTRPCRouter({
         });
       }
 
-      await ctx.prisma.purchaseAudit.create({
-        data: {
-          purchaseRequestId: request.id,
-          userId,
-          action: 'CREATED',
-        },
-      });
+      try {
+        await ctx.prisma.purchaseAudit.create({
+          data: {
+            purchaseRequestId: request.id,
+            userId,
+            action: 'CREATED',
+          },
+        });
+      } catch (auditError) {
+        console.error('[create] Audit log failed (non-blocking):', auditError);
+      }
 
       return request;
     }),
@@ -275,14 +279,18 @@ export const purchaseRouter = createTRPCRouter({
         });
       }
 
-      await ctx.prisma.purchaseAudit.create({
-        data: {
-          purchaseRequestId: id,
-          userId: ctx.session.user.id,
-          action: 'UPDATED',
-          changes: JSON.stringify(input),
-        },
-      });
+      try {
+        await ctx.prisma.purchaseAudit.create({
+          data: {
+            purchaseRequestId: id,
+            userId: ctx.session.user.id,
+            action: 'UPDATED',
+            changes: JSON.stringify(input),
+          },
+        });
+      } catch (auditError) {
+        console.error('[update] Audit log failed (non-blocking):', auditError);
+      }
 
       return updated;
     }),
@@ -379,13 +387,17 @@ export const purchaseRouter = createTRPCRouter({
         },
       });
 
-      await ctx.prisma.purchaseAudit.create({
-        data: {
-          purchaseRequestId: input.purchaseRequestId,
-          userId,
-          action: 'INQUIRY_ADDED',
-        },
-      });
+      try {
+        await ctx.prisma.purchaseAudit.create({
+          data: {
+            purchaseRequestId: input.purchaseRequestId,
+            userId,
+            action: 'INQUIRY_ADDED',
+          },
+        });
+      } catch (auditError) {
+        console.error('[addInquiry] Audit log failed (non-blocking):', auditError);
+      }
 
       return inquiry;
     }),
@@ -429,13 +441,17 @@ export const purchaseRouter = createTRPCRouter({
         },
       });
 
-      await ctx.prisma.purchaseAudit.create({
-        data: {
-          purchaseRequestId: input.id,
-          userId,
-          action: 'SUBMITTED',
-        },
-      });
+      try {
+        await ctx.prisma.purchaseAudit.create({
+          data: {
+            purchaseRequestId: input.id,
+            userId,
+            action: 'SUBMITTED',
+          },
+        });
+      } catch (auditError) {
+        console.error('[submit] Audit log failed (non-blocking):', auditError);
+      }
 
       return updated;
     }),
@@ -494,13 +510,17 @@ export const purchaseRouter = createTRPCRouter({
         });
       }
 
-      await ctx.prisma.purchaseAudit.create({
-        data: {
-          purchaseRequestId: input.purchaseRequestId,
-          userId: ctx.session.user.id,
-          action: 'INQUIRY_APPROVED',
-        },
-      });
+      try {
+        await ctx.prisma.purchaseAudit.create({
+          data: {
+            purchaseRequestId: input.purchaseRequestId,
+            userId: ctx.session.user.id,
+            action: 'INQUIRY_APPROVED',
+          },
+        });
+      } catch (auditError) {
+        console.error('[approveInquiry] Audit log failed (non-blocking):', auditError);
+      }
 
       return updated;
     }),
@@ -551,14 +571,18 @@ export const purchaseRouter = createTRPCRouter({
         });
       }
 
-      await ctx.prisma.purchaseAudit.create({
-        data: {
-          purchaseRequestId: input.id,
-          userId: ctx.session.user.id,
-          action: 'REJECTED',
-          changes: JSON.stringify({ reason: input.reason }),
-        },
-      });
+      try {
+        await ctx.prisma.purchaseAudit.create({
+          data: {
+            purchaseRequestId: input.id,
+            userId: ctx.session.user.id,
+            action: 'REJECTED',
+            changes: JSON.stringify({ reason: input.reason }),
+          },
+        });
+      } catch (auditError) {
+        console.error('[reject] Audit log failed (non-blocking):', auditError);
+      }
 
       return updated;
     }),
@@ -584,13 +608,17 @@ export const purchaseRouter = createTRPCRouter({
         data: { status: 'PURCHASED' },
       });
 
-      await ctx.prisma.purchaseAudit.create({
-        data: {
-          purchaseRequestId: input.id,
-          userId: ctx.session.user.id,
-          action: 'PURCHASED',
-        },
-      });
+      try {
+        await ctx.prisma.purchaseAudit.create({
+          data: {
+            purchaseRequestId: input.id,
+            userId: ctx.session.user.id,
+            action: 'PURCHASED',
+          },
+        });
+      } catch (auditError) {
+        console.error('[markPurchased] Audit log failed (non-blocking):', auditError);
+      }
 
       return updated;
     }),
@@ -611,13 +639,17 @@ export const purchaseRouter = createTRPCRouter({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'امکان حذف درخواست خریداری‌شده وجود ندارد' });
       }
 
-      await ctx.prisma.purchaseAudit.create({
-        data: {
-          purchaseRequestId: input.id,
-          userId: ctx.session.user.id,
-          action: 'DELETED',
-        },
-      });
+      try {
+        await ctx.prisma.purchaseAudit.create({
+          data: {
+            purchaseRequestId: input.id,
+            userId: ctx.session.user.id,
+            action: 'DELETED',
+          },
+        });
+      } catch (auditError) {
+        console.error('[delete] Audit log failed (non-blocking):', auditError);
+      }
 
       await ctx.prisma.purchaseRequest.delete({ where: { id: input.id } });
       return { success: true };
@@ -643,14 +675,18 @@ export const purchaseRouter = createTRPCRouter({
 
       await ctx.prisma.purchaseInquiry.delete({ where: { id: input.inquiryId } });
 
-      await ctx.prisma.purchaseAudit.create({
-        data: {
-          purchaseRequestId: inquiry.purchaseRequestId,
-          userId: ctx.session.user.id,
+      try {
+        await ctx.prisma.purchaseAudit.create({
+          data: {
+            purchaseRequestId: inquiry.purchaseRequestId,
+            userId: ctx.session.user.id,
           action: 'INQUIRY_REJECTED',
           changes: JSON.stringify({ inquiryId: input.inquiryId, reason: input.reason }),
         },
       });
+      } catch (auditError) {
+        console.error('[rejectInquiry] Audit log failed (non-blocking):', auditError);
+      }
 
       return { success: true };
     }),
