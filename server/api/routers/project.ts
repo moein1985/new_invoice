@@ -85,6 +85,7 @@ export const projectRouter = createTRPCRouter({
               user: { select: { id: true, fullName: true, role: true, username: true } },
             },
           },
+          employerUser: { select: { id: true, fullName: true, username: true } },
           _count: { select: { workReports: true } },
         },
       });
@@ -112,6 +113,7 @@ export const projectRouter = createTRPCRouter({
         description: z.string().optional().nullable(),
         address: z.string().optional().nullable(),
         employerName: z.string().optional().nullable(),
+        employerUserId: z.string().uuid().optional().nullable(),
         startDate: z.string().optional().nullable(),
         endDate: z.string().optional().nullable(),
       })
@@ -138,6 +140,7 @@ export const projectRouter = createTRPCRouter({
           description: input.description,
           address: input.address,
           employerName: input.employerName,
+          employerUserId: input.employerUserId || undefined,
           startDate: input.startDate ? new Date(input.startDate) : undefined,
           endDate: input.endDate ? new Date(input.endDate) : undefined,
         },
@@ -153,6 +156,7 @@ export const projectRouter = createTRPCRouter({
         description: z.string().optional().nullable(),
         address: z.string().optional().nullable(),
         employerName: z.string().optional().nullable(),
+        employerUserId: z.string().uuid().optional().nullable(),
         startDate: z.string().optional().nullable(),
         endDate: z.string().optional().nullable(),
         isActive: z.boolean().optional(),
@@ -275,5 +279,39 @@ export const projectRouter = createTRPCRouter({
       );
 
       return { workReports, contractorDocs, purchases, totalPurchaseAmount };
+    }),
+
+  // List employers for assignment (manager/admin only)
+  listEmployers: managerProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.user.findMany({
+      where: { role: 'EMPLOYER', isActive: true },
+      select: { id: true, fullName: true, username: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }),
+
+  // Assign employer to project (manager/admin only)
+  assignEmployer: managerProcedure
+    .input(
+      z.object({
+        projectId: z.string().uuid(),
+        userId: z.string().uuid(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.project.update({
+        where: { id: input.projectId },
+        data: { employerUserId: input.userId },
+      });
+    }),
+
+  // Remove employer from project (manager/admin only)
+  removeEmployer: managerProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.project.update({
+        where: { id: input.projectId },
+        data: { employerUserId: null },
+      });
     }),
 });

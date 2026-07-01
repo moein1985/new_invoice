@@ -11,7 +11,7 @@ import { Pagination } from '@/components/ui/pagination';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Plus, Trash2, Eye, UserPlus, ClipboardList, FileImage } from 'lucide-react';
+import { Plus, Trash2, Eye, UserPlus, ClipboardList, FileImage, Building2 } from 'lucide-react';
 import moment from 'moment-jalaali';
 
 export default function ProjectDetailPage() {
@@ -26,6 +26,8 @@ export default function ProjectDetailPage() {
   const [selectedContractor, setSelectedContractor] = useState('');
   const [removeMemberTarget, setRemoveMemberTarget] = useState<{ userId: string; name: string } | null>(null);
   const [deleteReportTarget, setDeleteReportTarget] = useState<{ id: string; number: string } | null>(null);
+  const [selectedEmployer, setSelectedEmployer] = useState('');
+  const [showAddEmployer, setShowAddEmployer] = useState(false);
 
   const role = session?.user?.role;
   const isManager = role === 'ADMIN' || role === 'MANAGER';
@@ -47,6 +49,32 @@ export default function ProjectDetailPage() {
 
   const { data: contractors } = trpc.project.listContractors.useQuery(undefined, {
     enabled: isManager && showAddMember,
+  });
+
+  const { data: employers } = trpc.project.listEmployers.useQuery(undefined, {
+    enabled: isManager && showAddEmployer,
+  });
+
+  const assignEmployerMutation = trpc.project.assignEmployer.useMutation({
+    onSuccess: () => {
+      refetchProject();
+      setShowAddEmployer(false);
+      setSelectedEmployer('');
+      toast.success('کارفرما به پروژه اختصاص یافت');
+    },
+    onError: (error) => {
+      toast.error('خطا', error.message);
+    },
+  });
+
+  const removeEmployerMutation = trpc.project.removeEmployer.useMutation({
+    onSuccess: () => {
+      refetchProject();
+      toast.success('کارفرما از پروژه حذف شد');
+    },
+    onError: (error) => {
+      toast.error('خطا', error.message);
+    },
   });
 
   const addMemberMutation = trpc.project.addMember.useMutation({
@@ -265,6 +293,90 @@ export default function ProjectDetailPage() {
             }}
             onClose={() => setRemoveMemberTarget(null)}
           />
+        </div>
+      )}
+
+      {/* Employer Section - Managers only */}
+      {isManager && (
+        <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <Building2 size={20} />
+              کارفرمای پروژه
+            </h2>
+            {!project.employerUser && (
+              <button
+                onClick={() => setShowAddEmployer(true)}
+                className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                <Plus size={14} />
+                اختصاص کارفرما
+              </button>
+            )}
+          </div>
+
+          {project.employerUser ? (
+            <div className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-2">
+              <div>
+                <span className="font-medium text-gray-800">{project.employerUser.fullName}</span>
+                <span className="mr-2 text-xs text-gray-500">({project.employerUser.username})</span>
+              </div>
+              <button
+                onClick={() => removeEmployerMutation.mutate({ projectId })}
+                className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                title="حذف کارفرما"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">هنوز کارفرمایی به این پروژه اختصاص نیافته است.</p>
+          )}
+
+          {/* Add Employer Modal */}
+          {showAddEmployer && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddEmployer(false)}>
+              <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl mx-4" onClick={(e) => e.stopPropagation()}>
+                <h3 className="mb-4 text-lg font-bold text-gray-800">انتخاب کارفرما</h3>
+                {!employers?.length ? (
+                  <p className="text-sm text-gray-500">کارفرمایی برای انتخاب وجود ندارد. ابتدا از بخش کاربران یک کاربر با نقش EMPLOYER ایجاد کنید.</p>
+                ) : (
+                  <>
+                    <select
+                      value={selectedEmployer}
+                      onChange={(e) => setSelectedEmployer(e.target.value)}
+                      className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">انتخاب کارفرما...</option>
+                      {employers.map((e: any) => (
+                        <option key={e.id} value={e.id}>{e.fullName} ({e.username})</option>
+                      ))}
+                    </select>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => setShowAddEmployer(false)}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        انصراف
+                      </button>
+                      <LoadingButton
+                        onClick={() => {
+                          if (selectedEmployer) {
+                            assignEmployerMutation.mutate({ projectId, userId: selectedEmployer });
+                          }
+                        }}
+                        isLoading={assignEmployerMutation.isPending}
+                        disabled={!selectedEmployer}
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        اختصاص
+                      </LoadingButton>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

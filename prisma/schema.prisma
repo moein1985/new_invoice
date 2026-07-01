@@ -54,6 +54,11 @@ model User {
   contractorDocs           ContractorDoc[]
   workReportAudits         WorkReportAudit[]
   purchaseAudits           PurchaseAudit[]
+  employerProjects         Project[]         @relation("ProjectEmployer")
+  tickets                  Ticket[]
+  closedTickets            Ticket[]          @relation("TicketClosedBy")
+  ticketReplies            TicketReply[]
+  ticketAttachments        TicketAttachment[]
   
   @@map("users")
 }
@@ -63,6 +68,7 @@ enum UserRole {
   MANAGER
   USER
   CONTRACTOR
+  EMPLOYER
 }
 
 // ============================================
@@ -253,6 +259,10 @@ enum NotificationType {
   PURCHASE_SUBMITTED
   PURCHASE_APPROVED
   PURCHASE_REJECTED
+  TICKET_CREATED
+  TICKET_REPLY
+  TICKET_STATUS_CHANGED
+  TICKET_CLOSED
 }
 
 // ============================================
@@ -277,6 +287,10 @@ model Project {
   workReports WorkReport[]
   purchaseRequests PurchaseRequest[]
   contractorDocs ContractorDoc[]
+  employerUser   User?      @relation("ProjectEmployer", fields: [employerUserId], references: [id])
+  tickets        Ticket[]
+
+  employerUserId String?
 
   @@map("projects")
 }
@@ -668,6 +682,84 @@ enum ContactCategory {
   VENDOR
   PERSONAL
   OTHER
+}
+
+// ============================================
+// EMPLOYER TICKET SYSTEM
+// ============================================
+
+model Ticket {
+  id           String         @id @default(uuid())
+  ticketNumber String         @unique
+  title        String
+  description  String
+  priority     TicketPriority @default(MEDIUM)
+  status       TicketStatus   @default(OPEN)
+  projectId    String
+  createdById  String
+  closedById   String?
+  closedAt     DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  // Relations
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User              @relation(fields: [createdById], references: [id])
+  closedBy    User?             @relation("TicketClosedBy", fields: [closedById], references: [id])
+  replies     TicketReply[]
+  attachments TicketAttachment[]
+
+  @@index([projectId])
+  @@index([createdById])
+  @@index([status])
+  @@map("tickets")
+}
+
+model TicketReply {
+  id        String   @id @default(uuid())
+  ticketId  String
+  content   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  // Relations
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_replies")
+}
+
+model TicketAttachment {
+  id           String   @id @default(uuid())
+  ticketId     String
+  fileName     String
+  filePath     String
+  fileType     String
+  fileSize     Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_attachments")
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 model SystemSettings {

@@ -26,6 +26,8 @@ import {
   Truck,
   BookUser,
   FileImage,
+  Ticket as TicketIcon,
+  Building2,
 } from 'lucide-react';
 import { GlobalSearch } from '@/components/ui/global-search';
 import { NotificationBell } from '@/components/ui/notification-bell';
@@ -109,6 +111,15 @@ export function Sidebar() {
         { href: '/calendar', label: 'تقویم', icon: <Calendar size={20} /> },
       ],
     },
+  ] : role === 'EMPLOYER' ? [
+    {
+      label: '',
+      items: [
+        { href: '/dashboard/employer', label: 'داشبورد', icon: <LayoutDashboard size={20} /> },
+        { href: '/calendar', label: 'تقویم', icon: <Calendar size={20} /> },
+        { href: '/tickets', label: 'تیکت‌ها', icon: <TicketIcon size={20} /> },
+      ],
+    },
   ] : [
     {
       label: '',
@@ -171,6 +182,12 @@ export function Sidebar() {
         { href: '/purchases', label: 'درخواست‌های خرید', icon: <ShoppingCart size={20} />,
           badge: pendingPurchases && pendingPurchases > 0 ? pendingPurchases : undefined,
         },
+      ],
+    },
+    {
+      label: 'کارفرمایان',
+      items: [
+        { href: '/employers', label: 'مدیریت تیکت‌ها', icon: <Building2 size={20} /> },
       ],
     },
     {
