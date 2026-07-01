@@ -301,9 +301,9 @@ export const purchaseRouter = createTRPCRouter({
       z.object({
         purchaseRequestId: z.string().uuid(),
         supplierName: z.string().min(1, 'نام تأمین‌کننده الزامی است'),
-        supplierPhone: z.string().optional(),
-        supplierAddress: z.string().optional(),
-        paymentMethod: z.string().optional(),
+        supplierPhone: z.string().optional().nullable(),
+        supplierAddress: z.string().optional().nullable(),
+        paymentMethod: z.string().optional().nullable(),
         paymentDays: z.number().int().min(0).optional().nullable(),
         notes: z.string().optional().nullable(),
         items: z.array(
