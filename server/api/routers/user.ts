@@ -3,12 +3,13 @@ import {
   createTRPCRouter,
   protectedProcedure,
   adminProcedure,
+  managerProcedure,
 } from '@/server/api/trpc';
 import bcrypt from 'bcryptjs';
 
 export const userRouter = createTRPCRouter({
-  // Get all users (admin only)
-  list: adminProcedure
+  // Get all users (manager and admin)
+  list: managerProcedure
     .input(
       z.object({
         page: z.number().min(1).default(1),
