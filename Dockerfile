@@ -44,9 +44,9 @@ RUN mkdir -p node_modules/@next/swc-linux-x64-musl node_modules/@next/swc-linux-
     rm /tmp/swc-linux-x64-musl-15.0.3.tgz /tmp/swc-linux-x64-gnu-15.0.3.tgz
 
 # Fix permissions for node_modules binaries
-RUN chmod -R +x node_modules/.bin && \
-    find node_modules -name "*.js" -path "*/bin/*" -exec chmod +x {} \; && \
-    find node_modules/.bin -type l -exec sh -c 'chmod +x "$(readlink -f "$0")"' {} \;
+RUN chmod -R +x node_modules/.bin 2>/dev/null || true && \
+    find node_modules -name "*.js" -path "*/bin/*" -exec chmod +x {} \; 2>/dev/null || true && \
+    find node_modules/.bin -type l -exec sh -c 'chmod +x "$(readlink -f "$0")"' {} \; 2>/dev/null || true
 
 # Copy source code
 COPY . .
