@@ -66,9 +66,7 @@ WORKDIR /app
 RUN sh -c '\
   echo "https://repo.iut.ac.ir/repo/alpine/v3.23/main" > /etc/apk/repositories && \
   echo "https://repo.iut.ac.ir/repo/alpine/v3.23/community" >> /etc/apk/repositories && \
-  echo "https://repo.iut.ac.ir/repo/alpine/v3.19/main" >> /etc/apk/repositories && \
-  echo "https://repo.iut.ac.ir/repo/alpine/v3.19/community" >> /etc/apk/repositories && \
-  apk add --no-cache dumb-init openssl "chromium=~124" nss freetype harfbuzz ca-certificates ttf-freefont'
+  apk add --no-cache dumb-init openssl chromium nss freetype harfbuzz ca-certificates ttf-freefont'
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
