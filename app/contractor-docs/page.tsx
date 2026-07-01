@@ -45,12 +45,12 @@ export default function ContractorDocsManagementPage() {
   const isManager = session?.user.role === 'ADMIN' || session?.user.role === 'MANAGER';
 
   const { data: projects } = trpc.project.list.useQuery(
-    { page: 1, limit: 200, activeOnly: false },
+    { page: 1, limit: 100, activeOnly: false },
     { enabled: !!session && isManager }
   );
 
   const { data: users } = trpc.user.list.useQuery(
-    { page: 1, limit: 200 },
+    { page: 1, limit: 100 },
     { enabled: !!session && isManager }
   );
 
