@@ -91,7 +91,7 @@ export default function UsersPage() {
       email: formData.get('email') as string,
       phone: formData.get('phone') as string,
       password: formData.get('password') as string,
-      role: formData.get('role') as 'ADMIN' | 'MANAGER' | 'USER',
+      role: formData.get('role') as 'ADMIN' | 'MANAGER' | 'USER' | 'CONTRACTOR' | 'EMPLOYER',
     };
 
     if (editingUser) {
@@ -221,12 +221,15 @@ export default function UsersPage() {
                           ? 'bg-blue-100 text-blue-800'
                           : user.role === 'CONTRACTOR'
                           ? 'bg-orange-100 text-orange-800'
+                          : user.role === 'EMPLOYER'
+                          ? 'bg-purple-100 text-purple-800'
                           : 'bg-green-100 text-green-800'
                       }`}>
                         {user.role === 'ADMIN' && 'مدیر'}
                         {user.role === 'MANAGER' && 'مدیر میانی'}
                         {user.role === 'USER' && 'کاربر'}
                         {user.role === 'CONTRACTOR' && 'پیمانکار'}
+                        {user.role === 'EMPLOYER' && 'کارفرما'}
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
@@ -359,6 +362,7 @@ export default function UsersPage() {
                     <option value="MANAGER">مدیر میانی</option>
                     <option value="ADMIN">مدیر</option>
                     <option value="CONTRACTOR">پیمانکار</option>
+                    <option value="EMPLOYER">کارفرما</option>
                   </select>
                 </div>
                 <div className="flex gap-3">

@@ -115,7 +115,7 @@ export const userRouter = createTRPCRouter({
         fullName: z.string().min(1),
         email: z.string().email(),
         phone: z.string().regex(/^[0-9]{11}$/, 'شماره تلفن باید 11 رقم باشد'),
-        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR']),
+        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR', 'EMPLOYER']),
         isActive: z.boolean().default(true),
       })
     )
@@ -155,7 +155,7 @@ export const userRouter = createTRPCRouter({
         fullName: z.string().min(1).optional(),
         email: z.string().email().optional(),
         phone: z.string().regex(/^[0-9]{11}$/, 'شماره تلفن باید 11 رقم باشد').optional(),
-        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR']).optional(),
+        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR', 'EMPLOYER']).optional(),
         isActive: z.boolean().optional(),
         password: z.string().min(6).optional(),
       })
@@ -167,7 +167,7 @@ export const userRouter = createTRPCRouter({
         fullName?: string;
         email?: string;
         phone?: string;
-        role?: 'ADMIN' | 'MANAGER' | 'USER' | 'CONTRACTOR';
+        role?: 'ADMIN' | 'MANAGER' | 'USER' | 'CONTRACTOR' | 'EMPLOYER';
         isActive?: boolean;
         password?: string;
       } = data;
