@@ -81,9 +81,10 @@ COPY --chown=nextjs:nodejs --from=builder /app/.next/static ./.next/static
 COPY --chown=nextjs:nodejs --from=builder /app/prisma ./prisma
 # Copy entire node_modules to ensure all Prisma dependencies are available
 COPY --chown=nextjs:nodejs --from=builder /app/node_modules ./node_modules
+COPY --chown=nextjs:nodejs --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# Generate Prisma Client in production stage with correct binary target
-RUN ./node_modules/.bin/prisma generate || echo "Prisma generate skipped (already generated in builder)"
+# Prisma client is already generated in builder stage and copied above.
+# No need to regenerate in runner stage (avoids npm install which fails without CDN).
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
