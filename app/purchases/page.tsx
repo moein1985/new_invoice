@@ -58,7 +58,7 @@ export default function PurchasesPage() {
   const [dateTo, setDateTo] = useState('');
 
   const role = session?.user?.role;
-  const isManager = role === 'ADMIN' || role === 'MANAGER';
+  const isManager = role === 'ADMIN' || role === 'MANAGER' || role === 'TECHNICAL';
 
   const { data, isLoading } = trpc.purchase.list.useQuery(
     {

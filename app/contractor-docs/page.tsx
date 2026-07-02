@@ -42,7 +42,7 @@ export default function ContractorDocsManagementPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  const isManager = session?.user.role === 'ADMIN' || session?.user.role === 'MANAGER';
+  const isManager = session?.user.role === 'ADMIN' || session?.user.role === 'MANAGER' || session?.user.role === 'TECHNICAL';
 
   const { data: projects } = trpc.project.list.useQuery(
     { page: 1, limit: 100, activeOnly: false },

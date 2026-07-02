@@ -3,6 +3,9 @@ import {
   createTRPCRouter,
   protectedProcedure,
   managerProcedure,
+  projectAdminProcedure,
+  getUserProjectIds,
+  isSuperuser,
 } from '@/server/api/trpc';
 import { TRPCError } from '@trpc/server';
 
@@ -23,8 +26,8 @@ export const workReportRouter = createTRPCRouter({
 
       const where: any = { projectId: input.projectId };
 
-      // Contractors only see their own reports
-      if (role === 'CONTRACTOR') {
+      // Contractors and Technical only see their own reports
+      if (role === 'CONTRACTOR' || role === 'TECHNICAL') {
         where.createdById = userId;
       }
 
@@ -73,8 +76,17 @@ export const workReportRouter = createTRPCRouter({
       const role = ctx.session.user.role;
 
       const where: any = {};
-      if (role === 'CONTRACTOR') {
+      // Contractors and Technical only see their own reports
+      if (role === 'CONTRACTOR' || role === 'TECHNICAL') {
         where.createdById = userId;
+      }
+      // Project-scoped users (ADMIN, USER) only see reports for their projects
+      const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+      if (projectIds !== null) {
+        if (projectIds.length === 0) {
+          return { data: [], meta: { page: input.page, limit: input.limit, total: 0, totalPages: 0 } };
+        }
+        where.projectId = { in: projectIds };
       }
       if (input.status) {
         where.approvalStatus = input.status;
@@ -120,8 +132,8 @@ export const workReportRouter = createTRPCRouter({
       };
     }),
 
-  // List all work reports across all projects (managers/admins)
-  listAll: managerProcedure
+  // List all work reports across all projects (managers, project admins, superuser)
+  listAll: projectAdminProcedure
     .input(
       z.object({
         page: z.number().min(1).default(1),
@@ -133,6 +145,8 @@ export const workReportRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const skip = (input.page - 1) * input.limit;
+      const role = ctx.session.user.role;
+      const userId = ctx.session.user.id;
 
       const where: any = {};
       if (input.approvalStatus) {
@@ -140,6 +154,14 @@ export const workReportRouter = createTRPCRouter({
       }
       if (input.projectId) {
         where.projectId = input.projectId;
+      }
+      // Project-scoped users only see reports for their projects
+      const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+      if (projectIds !== null) {
+        if (projectIds.length === 0) {
+          return { data: [], meta: { page: input.page, limit: input.limit, total: 0, totalPages: 0 } };
+        }
+        where.projectId = { in: projectIds };
       }
       if (input.search) {
         where.OR = [
@@ -195,8 +217,17 @@ export const workReportRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'گزارش کار یافت نشد' });
       }
 
-      // Contractors can only see their own reports
-      if (role === 'CONTRACTOR' && report.createdById !== userId) {
+      // Project-scoped users: check access via project membership
+      if (role !== 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null) {
+          if (!projectIds.includes(report.projectId)) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این گزارش ندارید' });
+          }
+        }
+      }
+      // Contractors and Technical can only see their own reports
+      if ((role === 'CONTRACTOR' || role === 'TECHNICAL') && report.createdById !== userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این گزارش ندارید' });
       }
 
@@ -223,12 +254,15 @@ export const workReportRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
       const role = ctx.session.user.role;
 
-      // Verify user is member of project (contractors) or is manager/admin
-      if (role === 'CONTRACTOR') {
+      // Verify user is member of project (for project-scoped roles) or is manager/superuser
+      if (role !== 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
         const membership = await ctx.prisma.projectMember.findUnique({
           where: { projectId_userId: { projectId: input.projectId, userId } },
         });
-        if (!membership) {
+        const isEmployer = await ctx.prisma.project.findFirst({
+          where: { id: input.projectId, employerUserId: userId },
+        });
+        if (!membership && !isEmployer) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'شما عضو این پروژه نیستید' });
         }
       }
@@ -279,9 +313,9 @@ export const workReportRouter = createTRPCRouter({
         },
       });
 
-      // Notify managers about new work report
+      // Notify managers and project admins about new work report
       const managers = await ctx.prisma.user.findMany({
-        where: { isActive: true, role: { in: ['ADMIN', 'MANAGER'] } },
+        where: { isActive: true, role: { in: ['MANAGER', 'ADMIN'] } },
         select: { id: true },
       });
 
@@ -338,13 +372,21 @@ export const workReportRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'گزارش کار یافت نشد' });
       }
 
-      // Contractors can only edit their own reports that are not yet approved
-      if (role === 'CONTRACTOR') {
+      // Contractors and Technical can only edit their own reports that are not yet approved
+      if (role === 'CONTRACTOR' || role === 'TECHNICAL') {
         if (report.createdById !== userId) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این گزارش ندارید' });
         }
         if (report.approvalStatus === 'APPROVED') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'گزارش تایید شده قابل ویرایش نیست' });
+        }
+      }
+
+      // Project-scoped ADMIN: verify project access
+      if (role === 'ADMIN' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(report.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این گزارش ندارید' });
         }
       }
 
@@ -357,8 +399,8 @@ export const workReportRouter = createTRPCRouter({
         });
       }
 
-      // Determine if manager is setting prices
-      const isManager = role === 'ADMIN' || role === 'MANAGER';
+      // Determine if manager/superuser is setting prices
+      const isManager = role === 'MANAGER' || isSuperuser(ctx.session.user.username) || role === 'ADMIN';
 
       // Delete old items and recreate
       await ctx.prisma.workReportItem.deleteMany({ where: { workReportId: input.id } });
@@ -380,8 +422,8 @@ export const workReportRouter = createTRPCRouter({
       // Recalculate total
       const totalAmount = items.reduce((sum, i) => sum + i.totalPrice, 0);
 
-      // If contractor edits a rejected report, reset to PENDING
-      const newStatus = role === 'CONTRACTOR' && report.approvalStatus === 'REJECTED'
+      // If contractor/technical edits a rejected report, reset to PENDING
+      const newStatus = (role === 'CONTRACTOR' || role === 'TECHNICAL') && report.approvalStatus === 'REJECTED'
         ? 'PENDING' as const
         : report.approvalStatus;
 
@@ -405,8 +447,8 @@ export const workReportRouter = createTRPCRouter({
       });
     }),
 
-  // Approve work report (manager/admin only)
-  approve: managerProcedure
+  // Approve work report (manager, project admin, or superuser)
+  approve: projectAdminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const report = await ctx.prisma.workReport.findUnique({ where: { id: input.id } });
@@ -443,8 +485,8 @@ export const workReportRouter = createTRPCRouter({
       return updated;
     }),
 
-  // Reject work report (manager/admin only)
-  reject: managerProcedure
+  // Reject work report (manager, project admin, or superuser)
+  reject: projectAdminProcedure
     .input(z.object({ id: z.string().uuid(), comment: z.string().optional().nullable() }))
     .mutation(async ({ ctx, input }) => {
       const report = await ctx.prisma.workReport.findUnique({ where: { id: input.id } });
@@ -494,12 +536,21 @@ export const workReportRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'گزارش کار یافت نشد' });
       }
 
-      if (role === 'CONTRACTOR') {
+      // Contractors and Technical can only delete their own non-approved reports
+      if (role === 'CONTRACTOR' || role === 'TECHNICAL') {
         if (report.createdById !== userId) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی ندارید' });
         }
         if (report.approvalStatus === 'APPROVED') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'گزارش تایید شده قابل حذف نیست' });
+        }
+      }
+
+      // Project-scoped ADMIN: verify project access
+      if (role === 'ADMIN' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(report.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی ندارید' });
         }
       }
 
@@ -517,11 +568,19 @@ export const workReportRouter = createTRPCRouter({
       });
     }),
 
-  // Pending work reports count for badge
-  pendingCount: managerProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.workReport.count({
-      where: { approvalStatus: 'PENDING' },
-    });
+  // Pending work reports count for badge (manager, project admin, superuser)
+  pendingCount: projectAdminProcedure.query(async ({ ctx }) => {
+    const role = ctx.session.user.role;
+    const userId = ctx.session.user.id;
+
+    const where: any = { approvalStatus: 'PENDING' };
+    // Project-scoped users only count pending for their projects
+    const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+    if (projectIds !== null) {
+      if (projectIds.length === 0) return 0;
+      where.projectId = { in: projectIds };
+    }
+    return ctx.prisma.workReport.count({ where });
   }),
 
   // List audit log for a work report
@@ -529,7 +588,8 @@ export const workReportRouter = createTRPCRouter({
     .input(z.object({ workReportId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const role = ctx.session.user.role;
-      if (role !== 'ADMIN' && role !== 'MANAGER') {
+      const userId = ctx.session.user.id;
+      if (role !== 'MANAGER' && !isSuperuser(ctx.session.user.username) && role !== 'ADMIN') {
         const report = await ctx.prisma.workReport.findUnique({
           where: { id: input.workReportId },
           select: { createdById: true },

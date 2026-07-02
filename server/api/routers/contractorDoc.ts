@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { createTRPCRouter, managerProcedure, protectedProcedure } from '@/server/api/trpc';
+import { createTRPCRouter, projectAdminProcedure, protectedProcedure, getUserProjectIds, isSuperuser } from '@/server/api/trpc';
 import path from 'path';
 import { existsSync } from 'fs';
 import { readdir, unlink } from 'fs/promises';
@@ -45,18 +45,27 @@ function normalizeItems(items: Array<z.infer<typeof contractorDocItemSchema>>) {
   });
 }
 
-async function assertProjectAccess(ctx: any, role: string, userId: string, projectId: string) {
-  if (role !== 'CONTRACTOR') {
+async function assertProjectAccess(ctx: any, role: string, userId: string, projectId: string, username?: string | null) {
+  // MANAGER and superuser have full access
+  if (role === 'MANAGER' || isSuperuser(username)) {
     return;
   }
 
+  // Check ProjectMember for CONTRACTOR, TECHNICAL, ADMIN, USER
   const membership = await ctx.prisma.projectMember.findUnique({
     where: { projectId_userId: { projectId, userId } },
   });
 
-  if (!membership) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'شما عضو این پروژه نیستید' });
-  }
+  if (membership) return;
+
+  // Check employer access
+  const employerProject = await ctx.prisma.project.findFirst({
+    where: { id: projectId, employerUserId: userId },
+  });
+
+  if (employerProject) return;
+
+  throw new TRPCError({ code: 'FORBIDDEN', message: 'شما عضو این پروژه نیستید' });
 }
 
 async function generateDocNumber(ctx: any) {
@@ -117,7 +126,7 @@ export const contractorDocRouter = createTRPCRouter({
         projectId: input.projectId,
       };
 
-      if (role === 'CONTRACTOR') {
+      if (role === 'CONTRACTOR' || role === 'TECHNICAL') {
         where.createdById = userId;
       }
       if (input.type) {
@@ -176,8 +185,17 @@ export const contractorDocRouter = createTRPCRouter({
       const role = ctx.session.user.role;
 
       const where: any = {};
-      if (role === 'CONTRACTOR') {
+      // Contractors and Technical only see their own docs
+      if (role === 'CONTRACTOR' || role === 'TECHNICAL') {
         where.createdById = userId;
+      }
+      // Project-scoped users (ADMIN, USER) only see docs for their projects
+      const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+      if (projectIds !== null) {
+        if (projectIds.length === 0) {
+          return { data: [], meta: { page: input.page, limit: input.limit, total: 0, totalPages: 0 } };
+        }
+        where.projectId = { in: projectIds };
       }
       if (input.status) {
         where.approvalStatus = input.status;
@@ -212,7 +230,7 @@ export const contractorDocRouter = createTRPCRouter({
       };
     }),
 
-  listAll: managerProcedure
+  listAll: projectAdminProcedure
     .input(
       z.object({
         page: z.number().min(1).default(1),
@@ -228,8 +246,18 @@ export const contractorDocRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const skip = (input.page - 1) * input.limit;
+      const role = ctx.session.user.role;
+      const userId = ctx.session.user.id;
 
       const where: any = {};
+      // Project-scoped users only see docs for their projects
+      const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+      if (projectIds !== null) {
+        if (projectIds.length === 0) {
+          return { data: [], meta: { page: input.page, limit: input.limit, total: 0, totalPages: 0 } };
+        }
+        where.projectId = { in: projectIds };
+      }
       if (input.type) {
         where.type = input.type;
       }
@@ -306,8 +334,16 @@ export const contractorDocRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'سند پیمانکار یافت نشد' });
       }
 
-      if (role === 'CONTRACTOR' && doc.createdById !== userId) {
+      if ((role === 'CONTRACTOR' || role === 'TECHNICAL') && doc.createdById !== userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این سند ندارید' });
+      }
+
+      // Project-scoped users: check project access
+      if (role !== 'MANAGER' && !isSuperuser(ctx.session.user.username) && role !== 'CONTRACTOR' && role !== 'TECHNICAL') {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(doc.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این سند ندارید' });
+        }
       }
 
       return doc;
@@ -331,7 +367,7 @@ export const contractorDocRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
       const role = ctx.session.user.role;
 
-      await assertProjectAccess(ctx, role, userId, input.projectId);
+      await assertProjectAccess(ctx, role, userId, input.projectId, ctx.session.user.username);
 
       if (input.type === 'RECEIPT' && !input.direction) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'جهت برای سند نوع رسید الزامی است' });
@@ -378,7 +414,7 @@ export const contractorDocRouter = createTRPCRouter({
       const managers = await ctx.prisma.user.findMany({
         where: {
           isActive: true,
-          role: { in: ['ADMIN', 'MANAGER'] },
+          role: { in: ['MANAGER', 'ADMIN'] },
         },
         select: { id: true },
       });
@@ -429,8 +465,16 @@ export const contractorDocRouter = createTRPCRouter({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'فقط سندهای در انتظار تایید قابل ویرایش هستند' });
       }
 
-      if (role === 'CONTRACTOR' && existing.createdById !== userId) {
+      if ((role === 'CONTRACTOR' || role === 'TECHNICAL') && existing.createdById !== userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این سند ندارید' });
+      }
+
+      // Project-scoped ADMIN: verify project access
+      if (role === 'ADMIN' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(existing.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این سند ندارید' });
+        }
       }
 
       const nextType = input.type ?? existing.type;
@@ -500,7 +544,7 @@ export const contractorDocRouter = createTRPCRouter({
       return updated;
     }),
 
-  approve: managerProcedure
+  approve: projectAdminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const doc = await ctx.prisma.contractorDoc.findUnique({ where: { id: input.id } });
@@ -529,7 +573,7 @@ export const contractorDocRouter = createTRPCRouter({
       return updated;
     }),
 
-  reject: managerProcedure
+  reject: projectAdminProcedure
     .input(z.object({ id: z.string().uuid(), reason: z.string().min(1, 'دلیل رد الزامی است') }))
     .mutation(async ({ ctx, input }) => {
       const doc = await ctx.prisma.contractorDoc.findUnique({ where: { id: input.id } });
@@ -575,12 +619,20 @@ export const contractorDocRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'سند پیمانکار یافت نشد' });
       }
 
-      if (role === 'CONTRACTOR') {
+      if (role === 'CONTRACTOR' || role === 'TECHNICAL') {
         if (doc.createdById !== userId) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این سند ندارید' });
         }
         if (doc.approvalStatus !== 'PENDING') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'پیمانکار فقط می‌تواند سند در انتظار خودش را حذف کند' });
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'فقط سندهای در انتظار قابل حذف هستند' });
+        }
+      }
+
+      // Project-scoped ADMIN: verify project access
+      if (role === 'ADMIN' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(doc.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'شما دسترسی به این سند ندارید' });
         }
       }
 
@@ -600,18 +652,24 @@ export const contractorDocRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  summary: managerProcedure.query(async ({ ctx }) => {
+  summary: projectAdminProcedure.query(async ({ ctx }) => {
+    const role = ctx.session.user.role;
+    const userId = ctx.session.user.id;
+
+    const projectFilter = await getUserProjectIds(userId, role, ctx.session.user.username);
+    const projectWhere = projectFilter !== null ? { projectId: { in: projectFilter } } : {};
+
     const [pendingCount, approvedTotalsByProject, approvedTotalsByContractor] = await Promise.all([
-      ctx.prisma.contractorDoc.count({ where: { approvalStatus: 'PENDING' } }),
+      ctx.prisma.contractorDoc.count({ where: { approvalStatus: 'PENDING', ...projectWhere } }),
       ctx.prisma.contractorDoc.groupBy({
         by: ['projectId'],
-        where: { approvalStatus: 'APPROVED' },
+        where: { approvalStatus: 'APPROVED', ...projectWhere },
         _sum: { totalAmount: true },
         _count: { _all: true },
       }),
       ctx.prisma.contractorDoc.groupBy({
         by: ['createdById'],
-        where: { approvalStatus: 'APPROVED' },
+        where: { approvalStatus: 'APPROVED', ...projectWhere },
         _sum: { totalAmount: true },
         _count: { _all: true },
       }),
@@ -650,13 +708,20 @@ export const contractorDocRouter = createTRPCRouter({
     };
   }),
 
-  pendingCount: protectedProcedure.query(async ({ ctx }) => {
+  pendingCount: projectAdminProcedure.query(async ({ ctx }) => {
     const role = ctx.session.user.role;
     const userId = ctx.session.user.id;
 
     const where: any = { approvalStatus: 'PENDING' };
-    if (role === 'CONTRACTOR') {
+    // Contractors and Technical only count their own
+    if (role === 'CONTRACTOR' || role === 'TECHNICAL') {
       where.createdById = userId;
+    }
+    // Project-scoped users only count for their projects
+    const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+    if (projectIds !== null) {
+      if (projectIds.length === 0) return 0;
+      where.projectId = { in: projectIds };
     }
 
     return ctx.prisma.contractorDoc.count({ where });

@@ -3,6 +3,9 @@ import {
   createTRPCRouter,
   protectedProcedure,
   managerProcedure,
+  projectAdminProcedure,
+  getUserProjectIds,
+  isSuperuser,
 } from '@/server/api/trpc';
 import { TRPCError } from '@trpc/server';
 
@@ -31,6 +34,17 @@ export const purchaseRouter = createTRPCRouter({
       // USER only sees assigned requests
       if (role === 'USER') {
         where.assignedToId = userId;
+      }
+
+      // Project-scoped users (ADMIN, CONTRACTOR, TECHNICAL): filter by their projects
+      if (role !== 'MANAGER' && !isSuperuser(ctx.session.user.username) && role !== 'USER') {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null) {
+          if (projectIds.length === 0) {
+            return { data: [], meta: { page: input.page, limit: input.limit, total: 0, totalPages: 0 } };
+          }
+          where.projectId = { in: projectIds };
+        }
       }
 
       if (input.status) where.status = input.status;
@@ -120,11 +134,19 @@ export const purchaseRouter = createTRPCRouter({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
       }
 
+      // Project-scoped users: check project access
+      if (role !== 'MANAGER' && !isSuperuser(ctx.session.user.username) && role !== 'USER') {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && request.projectId && !projectIds.includes(request.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
+        }
+      }
+
       return request;
     }),
 
-  // Create purchase request (ADMIN/MANAGER only)
-  create: managerProcedure
+  // Create purchase request (manager, project admin, or superuser)
+  create: projectAdminProcedure
     .input(
       z.object({
         title: z.string().min(1, 'عنوان الزامی است'),
@@ -220,8 +242,8 @@ export const purchaseRouter = createTRPCRouter({
       return request;
     }),
 
-  // Update purchase request
-  update: managerProcedure
+  // Update purchase request (manager, project admin, or superuser)
+  update: projectAdminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -456,8 +478,8 @@ export const purchaseRouter = createTRPCRouter({
       return updated;
     }),
 
-  // Approve an inquiry (ADMIN/MANAGER)
-  approveInquiry: managerProcedure
+  // Approve an inquiry (manager, project admin, or superuser)
+  approveInquiry: projectAdminProcedure
     .input(
       z.object({
         purchaseRequestId: z.string().uuid(),
@@ -525,8 +547,8 @@ export const purchaseRouter = createTRPCRouter({
       return updated;
     }),
 
-  // Reject purchase request (ADMIN/MANAGER)
-  reject: managerProcedure
+  // Reject purchase request (manager, project admin, or superuser)
+  reject: projectAdminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -587,8 +609,8 @@ export const purchaseRouter = createTRPCRouter({
       return updated;
     }),
 
-  // Mark as purchased (ADMIN/MANAGER)
-  markPurchased: managerProcedure
+  // Mark as purchased (manager, project admin, or superuser)
+  markPurchased: projectAdminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const request = await ctx.prisma.purchaseRequest.findUnique({
@@ -623,7 +645,7 @@ export const purchaseRouter = createTRPCRouter({
       return updated;
     }),
 
-  // Delete purchase request
+  // Delete purchase request (manager or superuser only)
   delete: managerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -655,8 +677,8 @@ export const purchaseRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  // Reject a specific inquiry (ADMIN/MANAGER)
-  rejectInquiry: managerProcedure
+  // Reject a specific inquiry (manager, project admin, or superuser)
+  rejectInquiry: projectAdminProcedure
     .input(z.object({
       inquiryId: z.string().uuid(),
       reason: z.string().optional().nullable(),
@@ -696,7 +718,7 @@ export const purchaseRouter = createTRPCRouter({
     .input(z.object({ purchaseRequestId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const role = ctx.session.user.role;
-      if (role !== 'ADMIN' && role !== 'MANAGER') {
+      if (role !== 'MANAGER' && !isSuperuser(ctx.session.user.username) && role !== 'ADMIN') {
         const req = await ctx.prisma.purchaseRequest.findUnique({
           where: { id: input.purchaseRequestId },
           select: { createdById: true, assignedToId: true },
@@ -712,12 +734,20 @@ export const purchaseRouter = createTRPCRouter({
       });
     }),
 
-  // Pending count for badge
-  pendingCount: managerProcedure
+  // Pending count for badge (manager, project admin, or superuser)
+  pendingCount: projectAdminProcedure
     .query(async ({ ctx }) => {
-      return ctx.prisma.purchaseRequest.count({
-        where: { status: 'INQUIRED' },
-      });
+      const role = ctx.session.user.role;
+      const userId = ctx.session.user.id;
+
+      const where: any = { status: 'INQUIRED' };
+      // Project-scoped users only count for their projects
+      const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+      if (projectIds !== null) {
+        if (projectIds.length === 0) return 0;
+        where.projectId = { in: projectIds };
+      }
+      return ctx.prisma.purchaseRequest.count({ where });
     }),
 
   // Delete an inquiry
@@ -749,7 +779,7 @@ export const purchaseRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  // Get users for assignment dropdown
+  // Get users for assignment dropdown (manager or superuser)
   getUsers: managerProcedure
     .query(async ({ ctx }) => {
       return ctx.prisma.user.findMany({

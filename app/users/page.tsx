@@ -73,8 +73,8 @@ export default function UsersPage() {
     return null;
   }
 
-  // Only admins can access
-  if (session.user.role !== 'ADMIN') {
+  // Only managers can access
+  if (session.user.role !== 'MANAGER') {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-xl text-red-600">شما دسترسی به این صفحه ندارید</div>
@@ -91,7 +91,7 @@ export default function UsersPage() {
       email: formData.get('email') as string,
       phone: formData.get('phone') as string,
       password: formData.get('password') as string,
-      role: formData.get('role') as 'ADMIN' | 'MANAGER' | 'USER' | 'CONTRACTOR' | 'EMPLOYER',
+      role: formData.get('role') as 'ADMIN' | 'MANAGER' | 'USER' | 'CONTRACTOR' | 'EMPLOYER' | 'TECHNICAL',
     };
 
     if (editingUser) {
@@ -221,14 +221,17 @@ export default function UsersPage() {
                           ? 'bg-blue-100 text-blue-800'
                           : user.role === 'CONTRACTOR'
                           ? 'bg-orange-100 text-orange-800'
+                          : user.role === 'TECHNICAL'
+                          ? 'bg-teal-100 text-teal-800'
                           : user.role === 'EMPLOYER'
                           ? 'bg-purple-100 text-purple-800'
                           : 'bg-green-100 text-green-800'
                       }`}>
-                        {user.role === 'ADMIN' && 'مدیر'}
-                        {user.role === 'MANAGER' && 'مدیر میانی'}
+                        {user.role === 'ADMIN' && 'مدیر پروژه'}
+                        {user.role === 'MANAGER' && 'مدیر سیستم'}
                         {user.role === 'USER' && 'کاربر'}
                         {user.role === 'CONTRACTOR' && 'پیمانکار'}
+                        {user.role === 'TECHNICAL' && 'فنی'}
                         {user.role === 'EMPLOYER' && 'کارفرما'}
                       </span>
                     </td>
@@ -359,9 +362,10 @@ export default function UsersPage() {
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                   >
                     <option value="USER">کاربر</option>
-                    <option value="MANAGER">مدیر میانی</option>
-                    <option value="ADMIN">مدیر</option>
+                    <option value="MANAGER">مدیر سیستم</option>
+                    <option value="ADMIN">مدیر پروژه</option>
                     <option value="CONTRACTOR">پیمانکار</option>
+                    <option value="TECHNICAL">فنی</option>
                     <option value="EMPLOYER">کارفرما</option>
                   </select>
                 </div>

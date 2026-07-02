@@ -2,13 +2,14 @@ import { z } from 'zod';
 import {
   createTRPCRouter,
   protectedProcedure,
-  adminProcedure,
+  superuserProcedure,
   managerProcedure,
+  isSuperuser,
 } from '@/server/api/trpc';
 import bcrypt from 'bcryptjs';
 
 export const userRouter = createTRPCRouter({
-  // Get all users (manager and admin)
+  // Get all users (manager and superuser)
   list: managerProcedure
     .input(
       z.object({
@@ -76,8 +77,8 @@ export const userRouter = createTRPCRouter({
     });
   }),
 
-  // Get single user by ID (admin only)
-  getById: adminProcedure
+  // Get single user by ID (manager or superuser)
+  getById: managerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const user = await ctx.prisma.user.findUnique({
@@ -106,8 +107,10 @@ export const userRouter = createTRPCRouter({
       return user;
     }),
 
-  // Create user (admin only)
-  create: adminProcedure
+  // Create user (manager or superuser)
+  // MANAGER can create ADMIN, USER, CONTRACTOR, TECHNICAL, EMPLOYER
+  // Only superuser can create MANAGER
+  create: managerProcedure
     .input(
       z.object({
         username: z.string().min(3).max(50),
@@ -115,11 +118,16 @@ export const userRouter = createTRPCRouter({
         fullName: z.string().min(1),
         email: z.string().email(),
         phone: z.string().regex(/^[0-9]{11}$/, 'شماره تلفن باید 11 رقم باشد'),
-        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR', 'EMPLOYER']),
+        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR', 'EMPLOYER', 'TECHNICAL']),
         isActive: z.boolean().default(true),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Only superuser can create MANAGER
+      if (input.role === 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+        throw new Error('فقط سوپرمدیر می‌تواند کاربر با نقش مدیر ایجاد کند');
+      }
+
       // Check if username exists
       const existing = await ctx.prisma.user.findUnique({
         where: { username: input.username },
@@ -147,27 +155,33 @@ export const userRouter = createTRPCRouter({
       });
     }),
 
-  // Update user (admin only)
-  update: adminProcedure
+  // Update user (manager or superuser)
+  // MANAGER can update roles except MANAGER; only superuser can set MANAGER
+  update: managerProcedure
     .input(
       z.object({
         id: z.string().uuid(),
         fullName: z.string().min(1).optional(),
         email: z.string().email().optional(),
         phone: z.string().regex(/^[0-9]{11}$/, 'شماره تلفن باید 11 رقم باشد').optional(),
-        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR', 'EMPLOYER']).optional(),
+        role: z.enum(['ADMIN', 'MANAGER', 'USER', 'CONTRACTOR', 'EMPLOYER', 'TECHNICAL']).optional(),
         isActive: z.boolean().optional(),
         password: z.string().min(6).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Only superuser can set role to MANAGER
+      if (input.role === 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+        throw new Error('فقط سوپرمدیر می‌تواند نقش مدیر اختصاص دهد');
+      }
+
       const { id, password, ...data } = input;
 
       const updateData: {
         fullName?: string;
         email?: string;
         phone?: string;
-        role?: 'ADMIN' | 'MANAGER' | 'USER' | 'CONTRACTOR' | 'EMPLOYER';
+        role?: 'ADMIN' | 'MANAGER' | 'USER' | 'CONTRACTOR' | 'EMPLOYER' | 'TECHNICAL';
         isActive?: boolean;
         password?: string;
       } = data;
@@ -189,8 +203,8 @@ export const userRouter = createTRPCRouter({
       });
     }),
 
-  // Delete user (admin only)
-  delete: adminProcedure
+  // Delete user (superuser only)
+  delete: superuserProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       // Don't allow deleting yourself

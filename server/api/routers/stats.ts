@@ -1,8 +1,21 @@
-import { createTRPCRouter, protectedProcedure } from '@/server/api/trpc';
+import { createTRPCRouter, protectedProcedure, getUserProjectIds, isSuperuser } from '@/server/api/trpc';
 
 export const statsRouter = createTRPCRouter({
   // آمار کلی داشبورد
   getDashboardStats: protectedProcedure.query(async ({ ctx }) => {
+    const role = ctx.session.user.role;
+    const userId = ctx.session.user.id;
+
+    // Project-scoped users get filtered stats
+    const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+    const isGlobal = projectIds === null;
+
+    // For project-scoped users, we filter work reports and contractor docs by project
+    // Documents remain global (no projectId on Document model)
+    const projectFilter = projectIds !== null && projectIds.length > 0
+      ? { projectId: { in: projectIds } }
+      : null;
+
     const [
       totalCustomers,
       totalDocuments,
@@ -12,27 +25,24 @@ export const statsRouter = createTRPCRouter({
       documentsByType,
       documentsByStatus,
       monthlyRevenue,
+      projectStats,
     ] = await Promise.all([
-      // تعداد کل مشتریان
       ctx.prisma.customer.count({ where: { isActive: true } }),
 
-      // تعداد کل اسناد
       ctx.prisma.document.count(),
 
-      // تعداد تاییدیه‌های در انتظار (فقط پیش‌فاکتورهای موقت)
       ctx.prisma.document.count({
-        where: { 
+        where: {
           approvalStatus: 'PENDING',
           documentType: 'TEMP_PROFORMA',
         },
       }),
 
-      // تعداد کاربران (فقط برای Admin)
-      ctx.session.user.role === 'ADMIN'
+      // Only superuser and MANAGER see user count
+      (role === 'MANAGER' || isSuperuser(ctx.session.user.username))
         ? ctx.prisma.user.count({ where: { isActive: true } })
         : 0,
 
-      // آخرین اسناد
       ctx.prisma.document.findMany({
         take: 5,
         orderBy: { createdAt: 'desc' },
@@ -42,23 +52,20 @@ export const statsRouter = createTRPCRouter({
         },
       }),
 
-      // اسناد بر اساس نوع
       ctx.prisma.document.groupBy({
         by: ['documentType'],
         _count: { id: true },
       }),
 
-      // اسناد بر اساس وضعیت تایید
       ctx.prisma.document.groupBy({
         by: ['approvalStatus'],
         _count: { id: true },
       }),
 
-      // درآمد ماهانه (6 ماه اخیر)
       ctx.prisma.$queryRaw<
         Array<{ month: string; total: number; count: number }>
       >`
-        SELECT 
+        SELECT
           TO_CHAR(DATE_TRUNC('month', "issueDate"), 'YYYY-MM') as month,
           SUM("finalAmount")::numeric as total,
           COUNT(*)::integer as count
@@ -69,6 +76,19 @@ export const statsRouter = createTRPCRouter({
         ORDER BY month DESC
         LIMIT 6
       `,
+
+      // Project-scoped stats for non-global users
+      !isGlobal && projectFilter
+        ? Promise.all([
+            ctx.prisma.workReport.count({ where: { ...projectFilter, approvalStatus: 'PENDING' } }),
+            ctx.prisma.workReport.count({ where: projectFilter }),
+            ctx.prisma.contractorDoc.count({ where: { ...projectFilter, approvalStatus: 'PENDING' } }),
+            ctx.prisma.contractorDoc.count({ where: projectFilter }),
+            ctx.prisma.purchaseRequest.count({ where: { ...projectFilter, status: 'INQUIRED' } }),
+            ctx.prisma.purchaseRequest.count({ where: projectFilter }),
+            ctx.prisma.project.count({ where: { id: { in: projectIds! } } }),
+          ])
+        : null,
     ]);
 
     return {
@@ -76,7 +96,15 @@ export const statsRouter = createTRPCRouter({
         totalCustomers,
         totalDocuments,
         pendingApprovals,
-        totalUsers: ctx.session.user.role === 'ADMIN' ? totalUsers : undefined,
+        totalUsers: (role === 'MANAGER' || isSuperuser(ctx.session.user.username)) ? totalUsers : undefined,
+        // Project-scoped stats
+        pendingWorkReports: projectStats?.[0] ?? undefined,
+        totalWorkReports: projectStats?.[1] ?? undefined,
+        pendingContractorDocs: projectStats?.[2] ?? undefined,
+        totalContractorDocs: projectStats?.[3] ?? undefined,
+        pendingPurchases: projectStats?.[4] ?? undefined,
+        totalPurchases: projectStats?.[5] ?? undefined,
+        totalProjects: projectStats?.[6] ?? undefined,
       },
       recentDocuments: recentDocuments.map((doc) => ({
         id: doc.id,

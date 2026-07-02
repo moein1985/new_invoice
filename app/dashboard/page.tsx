@@ -31,7 +31,7 @@ export default function DashboardPage() {
   // Fetch dashboard stats
   const { data: stats, isLoading: statsLoading } = trpc.stats.getDashboardStats.useQuery();
   const { data: pendingContractorDocs } = trpc.contractorDoc.pendingCount.useQuery(undefined, {
-    enabled: !!session && (session.user.role === 'ADMIN' || session.user.role === 'MANAGER'),
+    enabled: !!session && (session.user.role === 'ADMIN' || session.user.role === 'MANAGER' || session.user.role === 'TECHNICAL'),
   });
 
   // عنوان چرخان در tab مرورگر
@@ -65,6 +65,18 @@ export default function DashboardPage() {
   // Redirect contractors to their own dashboard
   if (session.user.role === 'CONTRACTOR') {
     router.push('/dashboard/contractor');
+    return null;
+  }
+
+  // Redirect technical to their own dashboard
+  if (session.user.role === 'TECHNICAL') {
+    router.push('/dashboard/technical');
+    return null;
+  }
+
+  // Redirect employer to their own dashboard
+  if (session.user.role === 'EMPLOYER') {
+    router.push('/dashboard/employer');
     return null;
   }
 

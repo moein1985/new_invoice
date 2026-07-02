@@ -3,6 +3,9 @@ import {
   createTRPCRouter,
   protectedProcedure,
   managerProcedure,
+  projectAdminProcedure,
+  getUserProjectIds,
+  isSuperuser,
 } from '@/server/api/trpc';
 import { TRPCError } from '@trpc/server';
 
@@ -41,6 +44,17 @@ export const ticketRouter = createTRPCRouter({
       // EMPLOYER: only tickets for their projects
       if (role === 'EMPLOYER') {
         where.project = { employerUserId: userId };
+      }
+
+      // Project-scoped users (ADMIN, USER, CONTRACTOR, TECHNICAL): only tickets for their projects
+      if (role !== 'EMPLOYER' && role !== 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null) {
+          if (projectIds.length === 0) {
+            return { data: [], meta: { page: input.page, limit: input.limit, total: 0, totalPages: 0 } };
+          }
+          where.projectId = { in: projectIds };
+        }
       }
 
       const [tickets, total] = await Promise.all([
@@ -106,6 +120,14 @@ export const ticketRouter = createTRPCRouter({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
       }
 
+      // Project-scoped users: check project access
+      if (role !== 'EMPLOYER' && role !== 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(ticket.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
+        }
+      }
+
       return ticket;
     }),
 
@@ -143,6 +165,14 @@ export const ticketRouter = createTRPCRouter({
       // EMPLOYER: only their own projects
       if (role === 'EMPLOYER' && project.employerUserId !== userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'شما فقط می‌توانید برای پروژه‌های خود تیکت ثبت کنید' });
+      }
+
+      // Project-scoped users: check project access
+      if (role !== 'EMPLOYER' && role !== 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(input.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'شما به این پروژه دسترسی ندارید' });
+        }
       }
 
       // Generate ticket number: TKT-1405-000001
@@ -221,7 +251,6 @@ export const ticketRouter = createTRPCRouter({
 
       const ticket = await ctx.prisma.ticket.findUnique({
         where: { id: input.ticketId },
-        select: { id: true, status: true, createdById: true },
         include: { project: { select: { employerUserId: true } } },
       });
 
@@ -232,6 +261,14 @@ export const ticketRouter = createTRPCRouter({
       // EMPLOYER: only their own projects
       if (role === 'EMPLOYER' && ticket.project.employerUserId !== userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
+      }
+
+      // Project-scoped users: check project access
+      if (role !== 'EMPLOYER' && role !== 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(ticket.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
+        }
       }
 
       if (ticket.status === 'CLOSED') {
@@ -303,7 +340,6 @@ export const ticketRouter = createTRPCRouter({
 
       const ticket = await ctx.prisma.ticket.findUnique({
         where: { id: input.ticketId },
-        select: { id: true, status: true },
         include: { project: { select: { employerUserId: true } } },
       });
 
@@ -313,6 +349,14 @@ export const ticketRouter = createTRPCRouter({
 
       if (role === 'EMPLOYER' && ticket.project.employerUserId !== userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
+      }
+
+      // Project-scoped users: check project access
+      if (role !== 'EMPLOYER' && role !== 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(ticket.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
+        }
       }
 
       if (ticket.status === 'CLOSED') {
@@ -331,8 +375,8 @@ export const ticketRouter = createTRPCRouter({
       });
     }),
 
-  // Update ticket status (manager/admin only)
-  updateStatus: managerProcedure
+  // Update ticket status (manager, project admin, or superuser)
+  updateStatus: projectAdminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -395,7 +439,6 @@ export const ticketRouter = createTRPCRouter({
 
       const ticket = await ctx.prisma.ticket.findUnique({
         where: { id: input.id },
-        select: { id: true, status: true },
         include: { project: { select: { employerUserId: true } } },
       });
 
@@ -406,6 +449,14 @@ export const ticketRouter = createTRPCRouter({
       // EMPLOYER: only their own projects
       if (role === 'EMPLOYER' && ticket.project.employerUserId !== userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
+      }
+
+      // Project-scoped users: check project access
+      if (role !== 'EMPLOYER' && role !== 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+        const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+        if (projectIds !== null && !projectIds.includes(ticket.projectId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی غیرمجاز' });
+        }
       }
 
       if (ticket.status === 'CLOSED') {
@@ -422,7 +473,7 @@ export const ticketRouter = createTRPCRouter({
       });
     }),
 
-  // Delete ticket (manager/admin only)
+  // Delete ticket (manager or superuser only)
   delete: managerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -437,6 +488,14 @@ export const ticketRouter = createTRPCRouter({
     const where: any = {};
     if (role === 'EMPLOYER') {
       where.project = { employerUserId: userId };
+    }
+    // Project-scoped users: filter by their projects
+    if (role !== 'EMPLOYER' && role !== 'MANAGER' && !isSuperuser(ctx.session.user.username)) {
+      const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+      if (projectIds !== null) {
+        if (projectIds.length === 0) return { byStatus: [], total: 0, recent: [] };
+        where.projectId = { in: projectIds };
+      }
     }
 
     const [byStatus, total, recent] = await Promise.all([

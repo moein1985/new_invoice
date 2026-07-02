@@ -56,26 +56,28 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
+  const isManagerOrAdmin = !!session && (session.user.role === 'ADMIN' || session.user.role === 'MANAGER' || session.user.role === 'TECHNICAL');
+
   const { data: pendingCount } = trpc.document.pendingApprovals.useQuery(undefined, {
-    enabled: !!session && (session.user.role === 'ADMIN' || session.user.role === 'MANAGER'),
+    enabled: isManagerOrAdmin,
     select: (data) => data?.length ?? 0,
   });
 
   const { data: staleCount } = trpc.document.staleDocuments.useQuery(undefined, {
-    enabled: !!session && (session.user.role === 'ADMIN' || session.user.role === 'MANAGER'),
+    enabled: isManagerOrAdmin,
     select: (data) => data?.length ?? 0,
   });
 
   const { data: pendingWorkReports } = trpc.workReport.pendingCount.useQuery(undefined, {
-    enabled: !!session && (session.user.role === 'ADMIN' || session.user.role === 'MANAGER'),
+    enabled: isManagerOrAdmin,
   });
 
   const { data: pendingPurchases } = trpc.purchase.pendingCount.useQuery(undefined, {
-    enabled: !!session && (session.user.role === 'ADMIN' || session.user.role === 'MANAGER'),
+    enabled: isManagerOrAdmin,
   });
 
   const { data: pendingContractorDocs } = trpc.contractorDoc.pendingCount.useQuery(undefined, {
-    enabled: !!session && (session.user.role === 'ADMIN' || session.user.role === 'MANAGER'),
+    enabled: isManagerOrAdmin,
   });
 
   // Close mobile menu on route change
@@ -120,6 +122,34 @@ export function Sidebar() {
         { href: '/tickets', label: 'تیکت‌ها', icon: <TicketIcon size={20} /> },
       ],
     },
+  ] : role === 'TECHNICAL' ? [
+    {
+      label: '',
+      items: [
+        { href: '/dashboard/technical', label: 'داشبورد', icon: <LayoutDashboard size={20} /> },
+        { href: '/projects', label: 'پروژه‌ها', icon: <FolderKanban size={20} /> },
+        { href: '/my-reports', label: 'گزارش‌های من', icon: <ClipboardList size={20} /> },
+        { href: '/my-docs', label: 'مستندات من', icon: <FileImage size={20} /> },
+        { href: '/calendar', label: 'تقویم', icon: <Calendar size={20} /> },
+      ],
+    },
+    {
+      label: 'افراد و پروژه‌ها',
+      items: [
+        {
+          href: '/work-reports',
+          label: 'گزارش کار',
+          icon: <ClipboardList size={20} />,
+          badge: pendingWorkReports && pendingWorkReports > 0 ? pendingWorkReports : undefined,
+        },
+        {
+          href: '/contractor-docs',
+          label: 'مستندات پیمانکار',
+          icon: <FileImage size={20} />,
+          badge: pendingContractorDocs && pendingContractorDocs > 0 ? pendingContractorDocs : undefined,
+        },
+      ],
+    },
   ] : [
     {
       label: '',
@@ -158,20 +188,20 @@ export function Sidebar() {
           href: '/projects',
           label: 'پروژه‌ها',
           icon: <FolderKanban size={20} />,
-          roles: ['ADMIN', 'MANAGER'],
+          roles: ['ADMIN', 'MANAGER', 'USER'],
         },
         {
           href: '/work-reports',
           label: 'گزارش کار',
           icon: <ClipboardList size={20} />,
-          roles: ['ADMIN', 'MANAGER'],
+          roles: ['ADMIN', 'MANAGER', 'USER'],
           badge: pendingWorkReports && pendingWorkReports > 0 ? pendingWorkReports : undefined,
         },
         {
           href: '/contractor-docs',
           label: 'مستندات پیمانکار',
           icon: <FileImage size={20} />,
-          roles: ['ADMIN', 'MANAGER'],
+          roles: ['ADMIN', 'MANAGER', 'USER'],
           badge: pendingContractorDocs && pendingContractorDocs > 0 ? pendingContractorDocs : undefined,
         },
       ],
@@ -193,7 +223,7 @@ export function Sidebar() {
     {
       label: 'تنظیمات و سیستم',
       items: [
-        { href: '/users', label: 'کاربران', icon: <UserCog size={20} />, roles: ['ADMIN'] },
+        { href: '/users', label: 'کاربران', icon: <UserCog size={20} />, roles: ['MANAGER'] },
         { href: '/settings/sip', label: 'تنظیمات SIP', icon: <Phone size={20} /> },
         { href: '/backup', label: 'بکاپ', icon: <Database size={20} /> },
       ],
@@ -301,7 +331,7 @@ export function Sidebar() {
           <div className="mb-2 px-3">
             <p className="truncate text-sm font-medium text-gray-800">{session.user.name}</p>
             <p className="text-xs text-gray-500">
-              {role === 'ADMIN' ? 'مدیر' : role === 'MANAGER' ? 'مسئول' : role === 'CONTRACTOR' ? 'پیمانکار' : 'کاربر'}
+              {role === 'ADMIN' ? 'مدیر پروژه' : role === 'MANAGER' ? 'مسئول' : role === 'CONTRACTOR' ? 'پیمانکار' : role === 'TECHNICAL' ? 'فنی' : role === 'EMPLOYER' ? 'کارفرما' : 'کاربر'}
             </p>
           </div>
         )}
@@ -420,7 +450,7 @@ export function Sidebar() {
           <div className="mb-2 px-3">
             <p className="truncate text-sm font-medium text-gray-800">{session.user.name}</p>
             <p className="text-xs text-gray-500">
-              {role === 'ADMIN' ? 'مدیر' : role === 'MANAGER' ? 'مسئول' : role === 'CONTRACTOR' ? 'پیمانکار' : 'کاربر'}
+              {role === 'ADMIN' ? 'مدیر پروژه' : role === 'MANAGER' ? 'مسئول' : role === 'CONTRACTOR' ? 'پیمانکار' : role === 'TECHNICAL' ? 'فنی' : role === 'EMPLOYER' ? 'کارفرما' : 'کاربر'}
             </p>
           </div>
           <button

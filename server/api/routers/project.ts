@@ -3,6 +3,7 @@ import {
   createTRPCRouter,
   protectedProcedure,
   managerProcedure,
+  getUserProjectIds,
 } from '@/server/api/trpc';
 import { TRPCError } from '@trpc/server';
 
@@ -36,9 +37,13 @@ export const projectRouter = createTRPCRouter({
         ];
       }
 
-      // Contractors only see projects they are members of
-      if (role === 'CONTRACTOR') {
-        where.members = { some: { userId } };
+      // Project-scoped users only see their own projects
+      const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+      if (projectIds !== null) {
+        if (projectIds.length === 0) {
+          return { data: [], meta: { page: input.page, limit: input.limit, total: 0, totalPages: 0 } };
+        }
+        where.id = { in: projectIds };
       }
 
       const [projects, total] = await Promise.all([
@@ -94,10 +99,12 @@ export const projectRouter = createTRPCRouter({
         throw new Error('پروژه یافت نشد');
       }
 
-      // Contractors can only see their own projects
-      if (role === 'CONTRACTOR') {
-        const isMember = project.members.some((m: any) => m.userId === userId);
-        if (!isMember) {
+      // Project-scoped users can only see their own projects
+      const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+      if (projectIds !== null) {
+        const isMember = project.id && projectIds.includes(project.id);
+        const isEmployer = project.employerUserId === userId;
+        if (!isMember && !isEmployer) {
           throw new Error('شما دسترسی به این پروژه ندارید');
         }
       }
@@ -217,6 +224,33 @@ export const projectRouter = createTRPCRouter({
     });
   }),
 
+  // List technical staff for member assignment
+  listTechnical: managerProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.user.findMany({
+      where: { role: 'TECHNICAL', isActive: true },
+      select: { id: true, fullName: true, username: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }),
+
+  // List users for member assignment
+  listUsers: managerProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.user.findMany({
+      where: { role: 'USER', isActive: true },
+      select: { id: true, fullName: true, username: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }),
+
+  // List admins (project supervisors) for member assignment
+  listAdmins: managerProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { id: true, fullName: true, username: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }),
+
   // Delete project (manager/admin only)
   delete: managerProcedure
     .input(z.object({ id: z.string().uuid() }))
@@ -240,11 +274,10 @@ export const projectRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'پروژه یافت نشد' });
       }
 
-      if (role === 'CONTRACTOR') {
-        const isMember = await ctx.prisma.projectMember.findUnique({
-          where: { projectId_userId: { projectId: input.id, userId } },
-        });
-        if (!isMember) {
+      const projectIds = await getUserProjectIds(userId, role, ctx.session.user.username);
+      if (projectIds !== null) {
+        const hasAccess = projectIds.includes(input.id);
+        if (!hasAccess) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'دسترسی ندارید' });
         }
       }

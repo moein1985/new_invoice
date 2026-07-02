@@ -29,7 +29,7 @@ export default function WorkReportsPage() {
       search: search || undefined,
       approvalStatus: statusFilter ? (statusFilter as 'PENDING' | 'APPROVED' | 'REJECTED') : undefined,
     },
-    { enabled: !!session && (role === 'ADMIN' || role === 'MANAGER') }
+    { enabled: !!session && (role === 'ADMIN' || role === 'MANAGER' || role === 'TECHNICAL') }
   );
 
   const approveMutation = trpc.workReport.approve.useMutation({
@@ -44,7 +44,7 @@ export default function WorkReportsPage() {
 
   if (status === 'loading') return <PageSkeleton />;
   if (!session) { router.push('/login'); return null; }
-  if (role !== 'ADMIN' && role !== 'MANAGER') {
+  if (role !== 'ADMIN' && role !== 'MANAGER' && role !== 'TECHNICAL') {
     return <div className="p-6 text-center text-gray-500">شما دسترسی به این بخش ندارید.</div>;
   }
 
