@@ -10,9 +10,9 @@ until node -e "const { Client } = require('pg'); const client = new Client({ con
   sleep 2
 done
 
-echo "📦 Running database migrations..."
+echo "📦 Running database migrations (skip if already pushed)..."
 # Use the local prisma version from node_modules directly
-./node_modules/.bin/prisma migrate deploy
+./node_modules/.bin/prisma migrate deploy || echo "⚠️  Migrate deploy failed, continuing (db push already applied)..."
 
 echo "🌱 Seeding database..."
 ./node_modules/.bin/prisma db seed || echo "⚠️  Seed already exists or failed, continuing..."

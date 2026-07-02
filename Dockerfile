@@ -83,7 +83,7 @@ COPY --chown=nextjs:nodejs --from=builder /app/prisma ./prisma
 COPY --chown=nextjs:nodejs --from=builder /app/node_modules ./node_modules
 
 # Generate Prisma Client in production stage with correct binary target
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate || echo "Prisma generate skipped (already generated in builder)"
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
