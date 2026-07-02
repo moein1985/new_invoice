@@ -16,6 +16,7 @@ import { amiRouter } from './routers/ami';
 import { systemSettingsRouter } from './routers/systemSettings';
 import { contractorDocRouter } from './routers/contractorDoc';
 import { ticketRouter } from './routers/ticket';
+import { projectFlowRouter } from './routers/projectFlow';
 
 /**
  * This is the primary router for your server.
@@ -39,6 +40,7 @@ export const appRouter = createTRPCRouter({
   systemSettings: systemSettingsRouter,
   contractorDoc: contractorDocRouter,
   ticket: ticketRouter,
+  projectFlow: projectFlowRouter,
 });
 
 // export type definition of API

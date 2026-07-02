@@ -431,6 +431,18 @@ export const contractorDocRouter = createTRPCRouter({
         });
       }
 
+      // Add to project flow
+      await ctx.prisma.projectFlowItem.create({
+        data: {
+          projectId: input.projectId,
+          type: 'CONTRACTOR_DOC',
+          referenceId: created.id,
+          title: `مستندات پیمانکار ${docNumber}`,
+          status: 'IN_PROGRESS',
+          createdById: userId,
+        },
+      });
+
       return created;
     }),
 
@@ -570,6 +582,12 @@ export const contractorDocRouter = createTRPCRouter({
         },
       });
 
+      // Update project flow item
+      await ctx.prisma.projectFlowItem.updateMany({
+        where: { type: 'CONTRACTOR_DOC', referenceId: input.id },
+        data: { status: 'COMPLETED' },
+      });
+
       return updated;
     }),
 
@@ -597,6 +615,12 @@ export const contractorDocRouter = createTRPCRouter({
           message: `سند ${doc.docNumber} رد شد`,
           link: `/projects/${doc.projectId}/contractor-docs/${doc.id}`,
         },
+      });
+
+      // Update project flow item
+      await ctx.prisma.projectFlowItem.updateMany({
+        where: { type: 'CONTRACTOR_DOC', referenceId: input.id },
+        data: { status: 'REJECTED' },
       });
 
       return updated;

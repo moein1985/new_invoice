@@ -340,6 +340,18 @@ export const workReportRouter = createTRPCRouter({
         },
       });
 
+      // Add to project flow
+      await ctx.prisma.projectFlowItem.create({
+        data: {
+          projectId: input.projectId,
+          type: 'WORK_REPORT',
+          referenceId: created.id,
+          title: `گزارش کار ${reportNumber}`,
+          status: 'IN_PROGRESS',
+          createdById: userId,
+        },
+      });
+
       return created;
     }),
 
@@ -482,6 +494,12 @@ export const workReportRouter = createTRPCRouter({
         },
       });
 
+      // Update project flow item
+      await ctx.prisma.projectFlowItem.updateMany({
+        where: { type: 'WORK_REPORT', referenceId: input.id },
+        data: { status: 'COMPLETED' },
+      });
+
       return updated;
     }),
 
@@ -519,6 +537,12 @@ export const workReportRouter = createTRPCRouter({
           action: 'REJECTED',
           changes: input.comment || null,
         },
+      });
+
+      // Update project flow item
+      await ctx.prisma.projectFlowItem.updateMany({
+        where: { type: 'WORK_REPORT', referenceId: input.id },
+        data: { status: 'REJECTED' },
       });
 
       return updated;

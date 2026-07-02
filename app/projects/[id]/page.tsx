@@ -11,7 +11,7 @@ import { Pagination } from '@/components/ui/pagination';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
-import { Plus, Trash2, Eye, UserPlus, ClipboardList, FileImage, Building2 } from 'lucide-react';
+import { Plus, Trash2, Eye, UserPlus, ClipboardList, FileImage, Building2, Activity } from 'lucide-react';
 import moment from 'moment-jalaali';
 
 export default function ProjectDetailPage() {
@@ -176,11 +176,20 @@ export default function ProjectDetailPage() {
             <h1 className="text-2xl font-bold text-gray-800">{project.name}</h1>
             <p className="mt-1 text-sm text-gray-500 font-mono">{project.code}</p>
           </div>
-          <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
-            project.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-          }`}>
-            {project.isActive ? 'فعال' : 'غیرفعال'}
-          </span>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/projects/${projectId}/flow`}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+            >
+              <Activity size={18} />
+              جریان پروژه
+            </Link>
+            <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
+              project.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {project.isActive ? 'فعال' : 'غیرفعال'}
+            </span>
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">

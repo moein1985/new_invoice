@@ -59,6 +59,8 @@ model User {
   closedTickets            Ticket[]          @relation("TicketClosedBy")
   ticketReplies            TicketReply[]
   ticketAttachments        TicketAttachment[]
+  flowItemsCreated         ProjectFlowItem[] @relation("FlowItemsCreatedBy")
+  flowItemsHidden          ProjectFlowItem[] @relation("FlowItemsHiddenBy")
   
   @@map("users")
 }
@@ -292,6 +294,7 @@ model Project {
   tickets        Ticket[]
 
   employerUserId String?
+  flowItems     ProjectFlowItem[]
 
   @@map("projects")
 }
@@ -761,6 +764,52 @@ enum TicketPriority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// ============================================
+// PROJECT FLOW (جریان پروژه)
+// ============================================
+
+model ProjectFlowItem {
+  id          String         @id @default(uuid())
+  projectId   String
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        FlowItemType
+  referenceId String?
+  title       String
+  description String?
+  status      FlowItemStatus
+  createdById String
+  createdBy   User           @relation("FlowItemsCreatedBy", fields: [createdById], references: [id])
+  hidden      Boolean        @default(false)
+  hiddenById  String?
+  hiddenBy    User?          @relation("FlowItemsHiddenBy", fields: [hiddenById], references: [id])
+  hiddenAt    DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([projectId, type])
+  @@index([projectId, status])
+  @@map("project_flow_items")
+}
+
+enum FlowItemType {
+  PROJECT_CREATED
+  MEMBER_ADDED
+  MEMBER_REMOVED
+  EMPLOYER_ASSIGNED
+  WORK_REPORT
+  CONTRACTOR_DOC
+  PURCHASE_REQUEST
+  DOCUMENT
+  TICKET
+}
+
+enum FlowItemStatus {
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  INFO
 }
 
 model SystemSettings {

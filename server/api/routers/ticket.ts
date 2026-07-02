@@ -234,6 +234,18 @@ export const ticketRouter = createTRPCRouter({
         console.error('[ticket.create] Notification failed (non-blocking):', notifError);
       }
 
+      // Add to project flow
+      await ctx.prisma.projectFlowItem.create({
+        data: {
+          projectId: input.projectId,
+          type: 'TICKET',
+          referenceId: ticket.id,
+          title: `تیکت: ${input.title}`,
+          status: 'IN_PROGRESS',
+          createdById: userId,
+        },
+      });
+
       return ticket;
     }),
 
@@ -463,7 +475,7 @@ export const ticketRouter = createTRPCRouter({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'تیکت قبلاً بسته شده است' });
       }
 
-      return ctx.prisma.ticket.update({
+      const updated = await ctx.prisma.ticket.update({
         where: { id: input.id },
         data: {
           status: 'CLOSED',
@@ -471,6 +483,14 @@ export const ticketRouter = createTRPCRouter({
           closedAt: new Date(),
         },
       });
+
+      // Update project flow item
+      await ctx.prisma.projectFlowItem.updateMany({
+        where: { type: 'TICKET', referenceId: input.id },
+        data: { status: 'COMPLETED' },
+      });
+
+      return updated;
     }),
 
   // Delete ticket (manager or superuser only)

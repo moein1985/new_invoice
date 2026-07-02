@@ -239,6 +239,20 @@ export const purchaseRouter = createTRPCRouter({
         console.error('[create] Audit log failed (non-blocking):', auditError);
       }
 
+      // Add to project flow
+      if (input.projectId) {
+        await ctx.prisma.projectFlowItem.create({
+          data: {
+            projectId: input.projectId,
+            type: 'PURCHASE_REQUEST',
+            referenceId: request.id,
+            title: `درخواست خرید ${requestNumber}`,
+            status: 'IN_PROGRESS',
+            createdById: userId,
+          },
+        });
+      }
+
       return request;
     }),
 
@@ -544,6 +558,14 @@ export const purchaseRouter = createTRPCRouter({
         console.error('[approveInquiry] Audit log failed (non-blocking):', auditError);
       }
 
+      // Update project flow item
+      if (request.projectId) {
+        await ctx.prisma.projectFlowItem.updateMany({
+          where: { type: 'PURCHASE_REQUEST', referenceId: input.purchaseRequestId },
+          data: { status: 'COMPLETED' },
+        });
+      }
+
       return updated;
     }),
 
@@ -604,6 +626,14 @@ export const purchaseRouter = createTRPCRouter({
         });
       } catch (auditError) {
         console.error('[reject] Audit log failed (non-blocking):', auditError);
+      }
+
+      // Update project flow item
+      if (request.projectId) {
+        await ctx.prisma.projectFlowItem.updateMany({
+          where: { type: 'PURCHASE_REQUEST', referenceId: input.id },
+          data: { status: 'REJECTED' },
+        });
       }
 
       return updated;

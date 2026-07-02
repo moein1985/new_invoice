@@ -140,7 +140,7 @@ export const projectRouter = createTRPCRouter({
       }
       const code = `PRJ-${year}-${seq.toString().padStart(4, '0')}`;
 
-      return ctx.prisma.project.create({
+      const project = await ctx.prisma.project.create({
         data: {
           name: input.name,
           code,
@@ -152,6 +152,18 @@ export const projectRouter = createTRPCRouter({
           endDate: input.endDate ? new Date(input.endDate) : undefined,
         },
       });
+
+      await ctx.prisma.projectFlowItem.create({
+        data: {
+          projectId: project.id,
+          type: 'PROJECT_CREATED',
+          title: 'پروژه ایجاد شد',
+          status: 'INFO',
+          createdById: ctx.session.user.id,
+        },
+      });
+
+      return project;
     }),
 
   // Update project (manager/admin only)
@@ -190,12 +202,35 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.projectMember.create({
+      const member = await ctx.prisma.projectMember.create({
         data: {
           projectId: input.projectId,
           userId: input.userId,
         },
+        include: { user: { select: { fullName: true, role: true } } },
       });
+
+      const roleLabels: Record<string, string> = {
+        ADMIN: 'مدیر پروژه',
+        TECHNICAL: 'فنی',
+        CONTRACTOR: 'پیمانکار',
+        USER: 'کاربر',
+        MANAGER: 'مسئول سیستم',
+        EMPLOYER: 'کارفرما',
+      };
+
+      await ctx.prisma.projectFlowItem.create({
+        data: {
+          projectId: input.projectId,
+          type: 'MEMBER_ADDED',
+          referenceId: input.userId,
+          title: `عضو اضافه شد: ${member.user.fullName} (${roleLabels[member.user.role] || member.user.role})`,
+          status: 'INFO',
+          createdById: ctx.session.user.id,
+        },
+      });
+
+      return member;
     }),
 
   // Remove member from project (manager/admin only)
@@ -207,12 +242,32 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.projectMember.deleteMany({
+      const member = await ctx.prisma.projectMember.findFirst({
+        where: { projectId: input.projectId, userId: input.userId },
+        include: { user: { select: { fullName: true } } },
+      });
+
+      await ctx.prisma.projectMember.deleteMany({
         where: {
           projectId: input.projectId,
           userId: input.userId,
         },
       });
+
+      if (member) {
+        await ctx.prisma.projectFlowItem.create({
+          data: {
+            projectId: input.projectId,
+            type: 'MEMBER_REMOVED',
+            referenceId: input.userId,
+            title: `عضو حذف شد: ${member.user.fullName}`,
+            status: 'INFO',
+            createdById: ctx.session.user.id,
+          },
+        });
+      }
+
+      return { success: true };
     }),
 
   // List contractors for member assignment
@@ -332,10 +387,24 @@ export const projectRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.project.update({
+      const result = await ctx.prisma.project.update({
         where: { id: input.projectId },
         data: { employerUserId: input.userId },
+        include: { employerUser: { select: { fullName: true } } },
       });
+
+      await ctx.prisma.projectFlowItem.create({
+        data: {
+          projectId: input.projectId,
+          type: 'EMPLOYER_ASSIGNED',
+          referenceId: input.userId,
+          title: `کارفرما اختصاص یافت: ${result.employerUser?.fullName || ''}`,
+          status: 'INFO',
+          createdById: ctx.session.user.id,
+        },
+      });
+
+      return result;
     }),
 
   // Remove employer from project (manager/admin only)
