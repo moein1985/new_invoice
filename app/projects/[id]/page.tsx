@@ -23,7 +23,8 @@ export default function ProjectDetailPage() {
 
   const [reportPage, setReportPage] = useState(1);
   const [showAddMember, setShowAddMember] = useState(false);
-  const [selectedContractor, setSelectedContractor] = useState('');
+  const [selectedMember, setSelectedMember] = useState('');
+  const [memberRole, setMemberRole] = useState<'ADMIN' | 'TECHNICAL' | 'CONTRACTOR' | 'USER'>('CONTRACTOR');
   const [removeMemberTarget, setRemoveMemberTarget] = useState<{ userId: string; name: string } | null>(null);
   const [deleteReportTarget, setDeleteReportTarget] = useState<{ id: string; number: string } | null>(null);
   const [selectedEmployer, setSelectedEmployer] = useState('');
@@ -48,7 +49,19 @@ export default function ProjectDetailPage() {
   );
 
   const { data: contractors } = trpc.project.listContractors.useQuery(undefined, {
-    enabled: isManager && showAddMember,
+    enabled: isManager && showAddMember && memberRole === 'CONTRACTOR',
+  });
+
+  const { data: admins } = trpc.project.listAdmins.useQuery(undefined, {
+    enabled: isManager && showAddMember && memberRole === 'ADMIN',
+  });
+
+  const { data: technicalStaff } = trpc.project.listTechnical.useQuery(undefined, {
+    enabled: isManager && showAddMember && memberRole === 'TECHNICAL',
+  });
+
+  const { data: regularUsers } = trpc.project.listUsers.useQuery(undefined, {
+    enabled: isManager && showAddMember && memberRole === 'USER',
   });
 
   const { data: employers } = trpc.project.listEmployers.useQuery(undefined, {
@@ -81,8 +94,8 @@ export default function ProjectDetailPage() {
     onSuccess: () => {
       refetchProject();
       setShowAddMember(false);
-      setSelectedContractor('');
-      toast.success('پیمانکار به پروژه اضافه شد');
+      setSelectedMember('');
+      toast.success('عضو به پروژه اضافه شد');
     },
     onError: (error) => {
       toast.error('خطا', error.message);
@@ -92,7 +105,7 @@ export default function ProjectDetailPage() {
   const removeMemberMutation = trpc.project.removeMember.useMutation({
     onSuccess: () => {
       refetchProject();
-      toast.success('پیمانکار از پروژه حذف شد');
+      toast.success('عضو از پروژه حذف شد');
     },
     onError: (error) => {
       toast.error('خطا', error.message);
@@ -120,7 +133,22 @@ export default function ProjectDetailPage() {
   }
 
   const existingMemberIds = new Set(project.members?.map((m: any) => m.userId) || []);
-  const availableContractors = contractors?.filter((c: any) => !existingMemberIds.has(c.id)) || [];
+  const availableByRole: Record<string, any[]> = {
+    ADMIN: admins?.filter((c: any) => !existingMemberIds.has(c.id)) || [],
+    TECHNICAL: technicalStaff?.filter((c: any) => !existingMemberIds.has(c.id)) || [],
+    CONTRACTOR: contractors?.filter((c: any) => !existingMemberIds.has(c.id)) || [],
+    USER: regularUsers?.filter((c: any) => !existingMemberIds.has(c.id)) || [],
+  };
+  const availableMembers = availableByRole[memberRole] || [];
+
+  const roleLabels: Record<string, string> = {
+    ADMIN: 'مدیر پروژه',
+    TECHNICAL: 'فنی',
+    CONTRACTOR: 'پیمانکار',
+    USER: 'کاربر',
+    MANAGER: 'مسئول سیستم',
+    EMPLOYER: 'کارفرما',
+  };
 
   const statusColors: Record<string, string> = {
     PENDING: 'bg-yellow-100 text-yellow-700',
@@ -196,26 +224,34 @@ export default function ProjectDetailPage() {
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
               <UserPlus size={20} />
-              پیمانکاران پروژه
+              اعضای پروژه
             </h2>
             <button
-              onClick={() => setShowAddMember(true)}
+              onClick={() => { setShowAddMember(true); setSelectedMember(''); }}
               className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
             >
               <Plus size={14} />
-              افزودن پیمانکار
+              افزودن عضو
             </button>
           </div>
 
           {project.members?.length === 0 ? (
-            <p className="text-sm text-gray-500">هنوز پیمانکاری به این پروژه اضافه نشده است.</p>
+            <p className="text-sm text-gray-500">هنوز عضوی به این پروژه اضافه نشده است.</p>
           ) : (
             <div className="space-y-2">
               {project.members?.map((member: any) => (
                 <div key={member.userId} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-2">
-                  <div>
+                  <div className="flex items-center gap-2">
                     <span className="font-medium text-gray-800">{member.user.fullName}</span>
-                    <span className="mr-2 text-xs text-gray-500">({member.user.username})</span>
+                    <span className="text-xs text-gray-500">({member.user.username})</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      member.user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
+                      member.user.role === 'TECHNICAL' ? 'bg-blue-100 text-blue-700' :
+                      member.user.role === 'CONTRACTOR' ? 'bg-orange-100 text-orange-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {roleLabels[member.user.role] || member.user.role}
+                    </span>
                   </div>
                   <button
                     onClick={() => setRemoveMemberTarget({ userId: member.userId, name: member.user.fullName })}
@@ -233,18 +269,33 @@ export default function ProjectDetailPage() {
           {showAddMember && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAddMember(false)}>
               <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl mx-4" onClick={(e) => e.stopPropagation()}>
-                <h3 className="mb-4 text-lg font-bold text-gray-800">افزودن پیمانکار</h3>
-                {availableContractors.length === 0 ? (
-                  <p className="text-sm text-gray-500">پیمانکاری برای افزودن وجود ندارد. ابتدا از بخش کاربران یک پیمانکار ایجاد کنید.</p>
+                <h3 className="mb-4 text-lg font-bold text-gray-800">افزودن عضو به پروژه</h3>
+
+                <div className="mb-3">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">نقش</label>
+                  <select
+                    value={memberRole}
+                    onChange={(e) => { setMemberRole(e.target.value as any); setSelectedMember(''); }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="ADMIN">مدیر پروژه</option>
+                    <option value="TECHNICAL">فنی</option>
+                    <option value="CONTRACTOR">پیمانکار</option>
+                    <option value="USER">کاربر</option>
+                  </select>
+                </div>
+
+                {availableMembers.length === 0 ? (
+                  <p className="text-sm text-gray-500">کاربری با این نقش برای افزودن وجود ندارد. ابتدا از بخش کاربران یک کاربر با این نقش ایجاد کنید.</p>
                 ) : (
                   <>
                     <select
-                      value={selectedContractor}
-                      onChange={(e) => setSelectedContractor(e.target.value)}
+                      value={selectedMember}
+                      onChange={(e) => setSelectedMember(e.target.value)}
                       className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     >
-                      <option value="">انتخاب پیمانکار...</option>
-                      {availableContractors.map((c: any) => (
+                      <option value="">انتخاب کاربر...</option>
+                      {availableMembers.map((c: any) => (
                         <option key={c.id} value={c.id}>{c.fullName} ({c.username})</option>
                       ))}
                     </select>
@@ -257,12 +308,12 @@ export default function ProjectDetailPage() {
                       </button>
                       <LoadingButton
                         onClick={() => {
-                          if (selectedContractor) {
-                            addMemberMutation.mutate({ projectId, userId: selectedContractor });
+                          if (selectedMember) {
+                            addMemberMutation.mutate({ projectId, userId: selectedMember });
                           }
                         }}
                         isLoading={addMemberMutation.isPending}
-                        disabled={!selectedContractor}
+                        disabled={!selectedMember}
                         className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                       >
                         افزودن
@@ -277,7 +328,7 @@ export default function ProjectDetailPage() {
           {/* Remove Member Confirm */}
           <ConfirmDialog
             open={!!removeMemberTarget}
-            title="حذف پیمانکار"
+            title="حذف عضو"
             message={`آیا از حذف «${removeMemberTarget?.name}» از این پروژه مطمئن هستید؟`}
             confirmText="حذف"
             cancelText="انصراف"

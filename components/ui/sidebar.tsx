@@ -336,7 +336,7 @@ export function Sidebar() {
           </div>
         )}
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={async () => { await signOut({ redirect: false }); window.location.href = '/login'; }}
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors
             ${collapsed ? 'justify-center' : ''}
           `}
@@ -454,7 +454,7 @@ export function Sidebar() {
             </p>
           </div>
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={async () => { await signOut({ redirect: false }); window.location.href = '/login'; }}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
           >
             <LogOut size={20} />
